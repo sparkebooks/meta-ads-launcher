@@ -254,15 +254,30 @@ class MetaAdsDashboard {
             });
         }
 
-        // Performance Monitoring Tab
-        document.getElementById('start-monitoring').addEventListener('click', () => this.startMonitoring());
-        document.getElementById('stop-monitoring').addEventListener('click', () => this.stopMonitoring());
-        document.getElementById('trigger-check').addEventListener('click', () => this.triggerCheck());
-        document.getElementById('kpi-thresholds-form').addEventListener('submit', (e) => this.updateKPIThresholds(e));
-        document.getElementById('dry-run-pause').addEventListener('click', () => this.dryRunPause());
-        document.getElementById('pause-underperforming').addEventListener('click', () => this.pauseUnderperforming());
-        document.getElementById('refresh-performance').addEventListener('click', () => this.refreshPerformanceData());
-        document.getElementById('clear-log').addEventListener('click', () => this.clearPauseLog());
+        // Performance Monitoring Tab (with null checks)
+        const startMonitoring = document.getElementById('start-monitoring');
+        if (startMonitoring) startMonitoring.addEventListener('click', () => this.startMonitoring());
+
+        const stopMonitoring = document.getElementById('stop-monitoring');
+        if (stopMonitoring) stopMonitoring.addEventListener('click', () => this.stopMonitoring());
+
+        const triggerCheck = document.getElementById('trigger-check');
+        if (triggerCheck) triggerCheck.addEventListener('click', () => this.triggerCheck());
+
+        const kpiForm = document.getElementById('kpi-thresholds-form');
+        if (kpiForm) kpiForm.addEventListener('submit', (e) => this.updateKPIThresholds(e));
+
+        const dryRunPause = document.getElementById('dry-run-pause');
+        if (dryRunPause) dryRunPause.addEventListener('click', () => this.dryRunPause());
+
+        const pauseUnderperforming = document.getElementById('pause-underperforming');
+        if (pauseUnderperforming) pauseUnderperforming.addEventListener('click', () => this.pauseUnderperforming());
+
+        const refreshPerformance = document.getElementById('refresh-performance');
+        if (refreshPerformance) refreshPerformance.addEventListener('click', () => this.refreshPerformanceData());
+
+        const clearLog = document.getElementById('clear-log');
+        if (clearLog) clearLog.addEventListener('click', () => this.clearPauseLog());
     }
 
     setupTabNavigation() {
