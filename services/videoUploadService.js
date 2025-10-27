@@ -7,13 +7,15 @@
 
 const { FacebookAdsApi, AdAccount, AdVideo } = require('facebook-nodejs-business-sdk');
 const fs = require('fs');
+const FormData = require('form-data');
+const axios = require('axios');
 
 // Initialize Facebook API
 FacebookAdsApi.init(process.env.META_ACCESS_TOKEN);
 const account = new AdAccount(process.env.META_AD_ACCOUNT_ID);
 
 /**
- * Upload a video file to Meta Ads
+ * Upload a video file to Meta Ads using direct HTTP API
  * @param {string} filePath - Path to the video file
  * @param {string} fileName - Original filename
  * @returns {Promise<string>} Video ID from Meta
@@ -27,19 +29,29 @@ async function uploadVideoToMeta(filePath, fileName) {
         const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
         console.log(`📊 Video size: ${fileSizeInMB} MB`);
 
-        // Method 1: Upload with file stream (recommended for large files)
-        const videoData = await account.createAdVideo([], {
-            filename: fs.createReadStream(filePath),
-            name: fileName
-        });
+        // Method 1: Direct HTTP API call with multipart form-data
+        console.log(`🔄 Attempting direct HTTP upload with form-data...`);
+        const form = new FormData();
+        form.append('source', fs.createReadStream(filePath));
+        form.append('name', fileName);
+        form.append('access_token', process.env.META_ACCESS_TOKEN);
 
-        console.log(`🔍 Raw video upload response:`, JSON.stringify(videoData, null, 2));
+        const response = await axios.post(
+            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
+            form,
+            {
+                headers: {
+                    ...form.getHeaders()
+                },
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity
+            }
+        );
+
+        console.log(`🔍 Raw video upload response:`, JSON.stringify(response.data, null, 2));
 
         // Extract video ID from response
-        const videoId = videoData.id ||
-                       videoData.video_id ||
-                       videoData._data?.id ||
-                       videoData._data?.video_id;
+        const videoId = response.data.id || response.data.video_id;
 
         if (!videoId) {
             throw new Error('Meta API returned success but no video ID found in response');
@@ -49,15 +61,14 @@ async function uploadVideoToMeta(filePath, fileName) {
         return videoId;
 
     } catch (error) {
-        console.error(`❌ Video upload failed: ${error.message}`);
+        console.error(`❌ Video upload failed:`, error.response?.data || error.message);
 
-        // Fallback: Try with direct file buffer for smaller files
+        // Fallback: Try with SDK method
         try {
-            console.log(`🔄 Trying alternative upload method with buffer...`);
-            const fileBuffer = fs.readFileSync(filePath);
+            console.log(`🔄 Trying SDK upload method...`);
 
             const videoData = await account.createAdVideo([], {
-                file_url: fileBuffer,
+                source: fs.createReadStream(filePath),
                 name: fileName
             });
 
@@ -66,15 +77,17 @@ async function uploadVideoToMeta(filePath, fileName) {
                            videoData._data?.id;
 
             if (!videoId) {
-                throw new Error('Alternative upload method: No video ID in response');
+                throw new Error('SDK method: No video ID in response');
             }
 
-            console.log(`✅ Alternative upload successful! Video ID: ${videoId}`);
+            console.log(`✅ SDK upload successful! Video ID: ${videoId}`);
             return videoId;
 
         } catch (fallbackError) {
             console.error(`❌ All video upload methods failed`);
-            throw new Error(`Video upload failed: ${error.message}. Fallback also failed: ${fallbackError.message}`);
+            const errorDetails = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+            const fallbackDetails = fallbackError.response?.data ? JSON.stringify(fallbackError.response.data) : fallbackError.message;
+            throw new Error(`Video upload failed: ${errorDetails}. Fallback also failed: ${fallbackDetails}`);
         }
     }
 }
