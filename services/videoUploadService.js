@@ -29,7 +29,7 @@ async function uploadVideoToMeta(filePath, fileName) {
 
         // Method 1: Upload with file stream (recommended for large files)
         const videoData = await account.createAdVideo([], {
-            file_url: fs.createReadStream(filePath),
+            source: fs.createReadStream(filePath),
             name: fileName
         });
 
