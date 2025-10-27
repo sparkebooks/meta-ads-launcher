@@ -134,6 +134,7 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
       try {
         let metaHash = null;
         let metaVideoId = null;
+        let metaThumbnailUrl = null;
 
         // Upload image to Meta if it's an image file
         if (file.mimetype.startsWith('image/')) {
@@ -281,10 +282,15 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
             const fileSizeInMB = (file.size / (1024 * 1024)).toFixed(2);
             console.log(`📊 Video size: ${fileSizeInMB} MB`);
 
-            // Upload video and get video ID
-            metaVideoId = await videoUploadService.uploadVideoToMeta(file.path, file.originalname);
+            // Upload video and get video ID + thumbnail URL
+            const videoData = await videoUploadService.uploadVideoToMeta(file.path, file.originalname);
+            metaVideoId = videoData.videoId;
+            metaThumbnailUrl = videoData.thumbnailUrl;
 
             console.log(`✅ Video uploaded successfully! Video ID: ${metaVideoId}`);
+            if (metaThumbnailUrl) {
+              console.log(`✅ Auto-generated thumbnail: ${metaThumbnailUrl}`);
+            }
 
           } catch (videoError) {
             console.error(`❌ Failed to upload video to Meta: ${videoError.message}`);
@@ -302,6 +308,7 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
           adsetId: adsetId,
           metaHash: metaHash, // For images
           metaVideoId: metaVideoId, // For videos
+          metaThumbnailUrl: metaThumbnailUrl, // For video thumbnails
           uploadedAt: new Date().toISOString(),
           status: 'ready'
         };

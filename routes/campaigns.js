@@ -487,8 +487,21 @@ router.post('/create-ads-batch', async (req, res) => {
           let adData;
 
           if (isVideoId) {
-            // Create video ad with thumbnail
-            // Meta requires a thumbnail image for video ads
+            // Create video ad with auto-generated thumbnail
+            // Fetch video details to get the thumbnail
+            console.log(`📹 Fetching video thumbnail for video ID: ${creativeId}`);
+            const videoUploadService = require('../services/videoUploadService');
+            const videoDetails = await videoUploadService.checkVideoStatus(creativeId);
+
+            const thumbnailUrl = videoDetails?.thumbnails?.data?.[0]?.uri ||
+                                videoDetails?.picture;
+
+            if (!thumbnailUrl) {
+              console.log(`⚠️ No auto-generated thumbnail found, using reference ad image as fallback`);
+            } else {
+              console.log(`✅ Using auto-generated thumbnail: ${thumbnailUrl}`);
+            }
+
             adData = {
               name: adName,
               adset_id: adsetId,
@@ -497,7 +510,8 @@ router.post('/create-ads-batch', async (req, res) => {
                   page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
                   video_data: {
                     video_id: creativeId,
-                    image_hash: existingImageHash, // Video thumbnail
+                    image_url: thumbnailUrl || undefined, // Use auto-generated thumbnail
+                    image_hash: thumbnailUrl ? undefined : existingImageHash, // Fallback to reference image
                     message: adCopy.primaryText,
                     title: adCopy.headline,
                     link_description: adCopy.description,
@@ -755,8 +769,21 @@ router.post('/create-duplicate-adset', async (req, res) => {
             let adData;
 
             if (isVideoId) {
-              // Create video ad with thumbnail
-              // Meta requires a thumbnail image for video ads
+              // Create video ad with auto-generated thumbnail
+              // Fetch video details to get the thumbnail
+              console.log(`📹 Fetching video thumbnail for video ID: ${creativeId}`);
+              const videoUploadService = require('../services/videoUploadService');
+              const videoDetails = await videoUploadService.checkVideoStatus(creativeId);
+
+              const thumbnailUrl = videoDetails?.thumbnails?.data?.[0]?.uri ||
+                                  videoDetails?.picture;
+
+              if (!thumbnailUrl) {
+                console.log(`⚠️ No auto-generated thumbnail found, using reference ad image as fallback`);
+              } else {
+                console.log(`✅ Using auto-generated thumbnail: ${thumbnailUrl}`);
+              }
+
               adData = {
                 name: adName,
                 adset_id: newAdsetId,
@@ -765,7 +792,8 @@ router.post('/create-duplicate-adset', async (req, res) => {
                     page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
                     video_data: {
                       video_id: creativeId,
-                      image_hash: existingImageHash, // Video thumbnail
+                      image_url: thumbnailUrl || undefined, // Use auto-generated thumbnail
+                      image_hash: thumbnailUrl ? undefined : existingImageHash, // Fallback to reference image
                       message: adCopy.primaryText,
                       title: adCopy.headline,
                       link_description: adCopy.description,

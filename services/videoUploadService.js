@@ -18,7 +18,7 @@ const account = new AdAccount(process.env.META_AD_ACCOUNT_ID);
  * Upload a video file to Meta Ads using direct HTTP API
  * @param {string} filePath - Path to the video file
  * @param {string} fileName - Original filename
- * @returns {Promise<string>} Video ID from Meta
+ * @returns {Promise<Object>} Object with videoId and thumbnailUrl
  */
 async function uploadVideoToMeta(filePath, fileName) {
     console.log(`🎥 Uploading video to Meta: ${fileName}`);
@@ -58,7 +58,25 @@ async function uploadVideoToMeta(filePath, fileName) {
         }
 
         console.log(`✅ Video uploaded successfully! Video ID: ${videoId}`);
-        return videoId;
+
+        // Fetch video details to get auto-generated thumbnail
+        console.log(`🖼️ Fetching auto-generated thumbnail for video ${videoId}...`);
+        const videoDetails = await checkVideoStatus(videoId);
+
+        const thumbnailUrl = videoDetails?.thumbnails?.data?.[0]?.uri ||
+                            videoDetails?.picture ||
+                            null;
+
+        if (thumbnailUrl) {
+            console.log(`✅ Auto-generated thumbnail URL: ${thumbnailUrl}`);
+        } else {
+            console.log(`⚠️ No thumbnail found, will use thumbnail URL in ad creation`);
+        }
+
+        return {
+            videoId,
+            thumbnailUrl
+        };
 
     } catch (error) {
         console.error(`❌ Video upload failed:`, error.response?.data || error.message);
@@ -81,7 +99,17 @@ async function uploadVideoToMeta(filePath, fileName) {
             }
 
             console.log(`✅ SDK upload successful! Video ID: ${videoId}`);
-            return videoId;
+
+            // Try to get thumbnail
+            const videoDetails = await checkVideoStatus(videoId);
+            const thumbnailUrl = videoDetails?.thumbnails?.data?.[0]?.uri ||
+                                videoDetails?.picture ||
+                                null;
+
+            return {
+                videoId,
+                thumbnailUrl
+            };
 
         } catch (fallbackError) {
             console.error(`❌ All video upload methods failed`);
