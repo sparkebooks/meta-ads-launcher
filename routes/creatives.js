@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
-// const sharp = require('sharp'); // Removed - not needed for Meta upload
+const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 const { FacebookAdsApi, AdAccount, AdImage } = require('facebook-nodejs-business-sdk');
 const router = express.Router();
@@ -81,19 +81,19 @@ router.post('/upload', upload.array('creatives', 20), async (req, res) => {
         duration: null
       };
 
-      // Get image/video metadata (disabled - sharp not available)
-      // if (file.mimetype.startsWith('image/')) {
-      //   try {
-      //     const metadata = await sharp(file.path).metadata();
-      //     fileInfo.dimensions = {
-      //       width: metadata.width,
-      //       height: metadata.height,
-      //       aspectRatio: (metadata.width / metadata.height).toFixed(2)
-      //     };
-      //   } catch (error) {
-      //     console.error('Error getting image metadata:', error);
-      //   }
-      // }
+      // Get image/video metadata
+      if (file.mimetype.startsWith('image/')) {
+        try {
+          const metadata = await sharp(file.path).metadata();
+          fileInfo.dimensions = {
+            width: metadata.width,
+            height: metadata.height,
+            aspectRatio: (metadata.width / metadata.height).toFixed(2)
+          };
+        } catch (error) {
+          console.error('Error getting image metadata:', error);
+        }
+      }
 
       uploadedFiles.push(fileInfo);
     }
@@ -284,19 +284,19 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
           status: 'ready'
         };
 
-        // Get image/video metadata (disabled - sharp not available)
-        // if (file.mimetype.startsWith('image/')) {
-        //   try {
-        //     const metadata = await sharp(file.path).metadata();
-        //     fileInfo.dimensions = {
-        //       width: metadata.width,
-        //       height: metadata.height,
-        //       aspectRatio: (metadata.width / metadata.height).toFixed(2)
-        //     };
-        //   } catch (error) {
-        //     console.error('Error getting image metadata:', error);
-        //   }
-        // }
+        // Get image/video metadata
+        if (file.mimetype.startsWith('image/')) {
+          try {
+            const metadata = await sharp(file.path).metadata();
+            fileInfo.dimensions = {
+              width: metadata.width,
+              height: metadata.height,
+              aspectRatio: (metadata.width / metadata.height).toFixed(2)
+            };
+          } catch (error) {
+            console.error('Error getting image metadata:', error);
+          }
+        }
 
         uploadedFiles.push(fileInfo);
         
