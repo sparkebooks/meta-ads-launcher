@@ -487,7 +487,8 @@ router.post('/create-ads-batch', async (req, res) => {
           let adData;
 
           if (isVideoId) {
-            // Create video ad
+            // Create video ad with thumbnail
+            // Meta requires a thumbnail image for video ads
             adData = {
               name: adName,
               adset_id: adsetId,
@@ -496,6 +497,7 @@ router.post('/create-ads-batch', async (req, res) => {
                   page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
                   video_data: {
                     video_id: creativeId,
+                    image_hash: existingImageHash, // Video thumbnail
                     message: adCopy.primaryText,
                     title: adCopy.headline,
                     link_description: adCopy.description,
@@ -747,10 +749,14 @@ router.post('/create-duplicate-adset', async (req, res) => {
 
             console.log(`🎬 Creative type: ${isVideoId ? 'VIDEO' : 'IMAGE'} (${creativeId.substring(0, 20)}...)`);
 
+            // Get existing image hash for use as video thumbnail or fallback
+            const existingImageHash = referenceAd?.creative?.object_story_spec?.link_data?.image_hash;
+
             let adData;
 
             if (isVideoId) {
-              // Create video ad
+              // Create video ad with thumbnail
+              // Meta requires a thumbnail image for video ads
               adData = {
                 name: adName,
                 adset_id: newAdsetId,
@@ -759,6 +765,7 @@ router.post('/create-duplicate-adset', async (req, res) => {
                     page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
                     video_data: {
                       video_id: creativeId,
+                      image_hash: existingImageHash, // Video thumbnail
                       message: adCopy.primaryText,
                       title: adCopy.headline,
                       link_description: adCopy.description,
@@ -777,7 +784,6 @@ router.post('/create-duplicate-adset', async (req, res) => {
               // Create image ad
               // Use existing image hash from reference ad if creative ID is mock
               let finalImageHash = creativeId;
-              const existingImageHash = referenceAd?.creative?.object_story_spec?.link_data?.image_hash;
               if (creativeId.startsWith('mock_hash_') && existingImageHash) {
                 finalImageHash = existingImageHash;
                 console.log(`🔄 Replacing mock hash with existing image hash: ${finalImageHash}`);

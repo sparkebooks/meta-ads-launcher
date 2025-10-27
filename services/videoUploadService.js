@@ -126,12 +126,11 @@ async function checkVideoStatus(videoId) {
 
 /**
  * Create ad with video creative
- * @param {Object} adData - Ad configuration
- * @param {string} videoId - Video ID from Meta
+ * @param {Object} adData - Ad configuration including adsetId, videoId, adCopy, and imageHash (for thumbnail)
  * @returns {Promise<Object>} Created ad details
  */
 async function createAdWithVideo(adData) {
-    const { adsetId, videoId, adCopy } = adData;
+    const { adsetId, videoId, adCopy, imageHash } = adData;
 
     console.log(`📝 Creating video ad in adset ${adsetId}`);
 
@@ -143,6 +142,7 @@ async function createAdWithVideo(adData) {
                 page_id: process.env.META_PAGE_ID,
                 video_data: {
                     video_id: videoId,
+                    image_hash: imageHash, // Thumbnail image required by Meta
                     message: adCopy.primaryText,
                     title: adCopy.headline,
                     link_description: adCopy.description,
