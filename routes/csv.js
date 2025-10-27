@@ -35,8 +35,18 @@ const upload = multer({
   }
 });
 
-// Generate landing page URL with book_id parameter
-function generateLandingPageUrl(bookId) {
+// Generate landing page URL with custom base URL + bookId
+function generateLandingPageUrl(bookId, baseLandingPageUrl) {
+  // If custom base URL provided in CSV, use it
+  if (baseLandingPageUrl && baseLandingPageUrl.trim()) {
+    // Ensure base URL ends with / for clean concatenation
+    const cleanBaseUrl = baseLandingPageUrl.trim().endsWith('/')
+      ? baseLandingPageUrl.trim()
+      : baseLandingPageUrl.trim() + '/';
+    return `${cleanBaseUrl}${bookId}`;
+  }
+
+  // Fallback to old format if no base URL provided
   const baseUrl = process.env.BASE_LANDING_PAGE_URL || 'https://yourdomain.com';
   return `${baseUrl}/lp1?book_id=${bookId}`;
 }
@@ -57,7 +67,7 @@ router.post('/upload-ad-copy', upload.single('csvFile'), async (req, res) => {
 
     const stream = fs.createReadStream(csvFilePath)
       .pipe(csv({
-        headers: ['bookId', 'variation', 'primaryText', 'headline', 'description'],
+        headers: ['bookId', 'variation', 'primaryText', 'headline', 'description', 'baseLandingPageUrl'],
         skipEmptyLines: true
       }));
 
@@ -98,7 +108,7 @@ router.post('/upload-ad-copy', upload.single('csvFile'), async (req, res) => {
         headline: row.headline || '',
         description: row.description || '',
         callToAction: 'LEARN_MORE', // Default CTA
-        landingPageUrl: generateLandingPageUrl(row.bookId) // Auto-generate landing page
+        landingPageUrl: generateLandingPageUrl(row.bookId, row.baseLandingPageUrl) // Generate with custom base URL
       };
 
       adCopyData.push(adCopyItem);
@@ -131,11 +141,11 @@ router.post('/upload-ad-copy', upload.single('csvFile'), async (req, res) => {
 
 // Get sample CSV format
 router.get('/sample-format', (req, res) => {
-  const sampleCSV = `BookID,Variation,PrimaryText,Headline,Description
-book_123,v1,"Discover steamy romance in our latest collection","Hot New Release","Get it now!"
-book_123,v2,"Fall in love with our latest bestseller","Romance Awaits","Download now!"
-book_456,,"Mystery and suspense await you","Thrilling Mystery","Read today!"
-book_789,,"Another single variation book","Great Story","Check it out!"`;
+  const sampleCSV = `BookID,Variation,PrimaryText,Headline,Description,BaseLandingPageURL
+3106,v1,"Discover steamy romance in our latest collection","Hot New Release","Get it now!","https://sparkereader.com/481/"
+3106,v2,"Fall in love with our latest bestseller","Romance Awaits","Download now!","https://sparkereader.com/481/"
+3107,,"Mystery and suspense await you","Thrilling Mystery","Read today!","https://sparkereader.com/481/"
+3108,,"Another single variation book","Great Story","Check it out!","https://sparkereader.com/482/"`;
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="ad-copy-sample.csv"');
@@ -158,7 +168,7 @@ router.post('/validate-csv', upload.single('csvFile'), async (req, res) => {
     // Parse CSV file for validation
     const stream = fs.createReadStream(csvFilePath)
       .pipe(csv({
-        headers: ['bookId', 'variation', 'primaryText', 'headline', 'description'],
+        headers: ['bookId', 'variation', 'primaryText', 'headline', 'description', 'baseLandingPageUrl'],
         skipEmptyLines: true
       }));
 
