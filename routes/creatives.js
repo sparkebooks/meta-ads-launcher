@@ -133,7 +133,8 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
     for (const file of req.files) {
       try {
         let metaHash = null;
-        
+        let metaVideoId = null;
+
         // Upload image to Meta if it's an image file
         if (file.mimetype.startsWith('image/')) {
           console.log(`🖼️ Uploading image to Meta: ${file.originalname}`);
@@ -271,6 +272,26 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
           }
         }
 
+        // Upload video to Meta if it's a video file
+        else if (file.mimetype.startsWith('video/')) {
+          console.log(`🎥 Uploading video to Meta: ${file.originalname}`);
+
+          try {
+            const videoUploadService = require('../services/videoUploadService');
+            const fileSizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+            console.log(`📊 Video size: ${fileSizeInMB} MB`);
+
+            // Upload video and get video ID
+            metaVideoId = await videoUploadService.uploadVideoToMeta(file.path, file.originalname);
+
+            console.log(`✅ Video uploaded successfully! Video ID: ${metaVideoId}`);
+
+          } catch (videoError) {
+            console.error(`❌ Failed to upload video to Meta: ${videoError.message}`);
+            throw new Error(`Meta video upload failed: ${videoError.message}`);
+          }
+        }
+
         const fileInfo = {
           id: uuidv4(),
           originalName: file.originalname,
@@ -279,7 +300,8 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
           size: file.size,
           mimetype: file.mimetype,
           adsetId: adsetId,
-          metaHash: metaHash, // This is what we need for ad creation
+          metaHash: metaHash, // For images
+          metaVideoId: metaVideoId, // For videos
           uploadedAt: new Date().toISOString(),
           status: 'ready'
         };
@@ -315,13 +337,13 @@ router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res)
     console.log(`✅ Successfully processed ${uploadedFiles.length} files for adset ${adsetId}`);
 
     // Filter successful uploads
-    const successfulUploads = uploadedFiles.filter(f => f.status === 'ready' && f.metaHash);
+    const successfulUploads = uploadedFiles.filter(f => f.status === 'ready' && (f.metaHash || f.metaVideoId));
     const failedUploads = uploadedFiles.filter(f => f.status === 'failed');
 
     res.json({
       success: successfulUploads.length > 0,
       message: `Creative files processed: ${successfulUploads.length} successful, ${failedUploads.length} failed`,
-      creativeIds: successfulUploads.map(f => f.metaHash), // Return Meta hashes for ad creation
+      creativeIds: successfulUploads.map(f => f.metaHash || f.metaVideoId), // Return Meta hashes/video IDs for ad creation
       files: uploadedFiles,
       totalFiles: uploadedFiles.length,
       successfulFiles: successfulUploads.length,

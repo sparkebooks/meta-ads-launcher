@@ -478,34 +478,68 @@ router.post('/create-ads-batch', async (req, res) => {
           
           console.log(`📝 Creating ad: ${adName}`);
           
-          // Use existing image hash from reference ad if creative ID is mock
-          let finalImageHash = creativeId;
-          if (creativeId.startsWith('mock_hash_') && existingImageHash) {
-            finalImageHash = existingImageHash;
-            console.log(`🔄 Replacing mock hash with existing image hash: ${finalImageHash}`);
-          }
-          
-          // Create the ad using Meta API
-          const adData = {
-            name: adName,
-            adset_id: adsetId,
-            creative: {
-              object_story_spec: {
-                page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
-                link_data: {
-                  link: adCopy.landingPageUrl,
-                  message: adCopy.primaryText,
-                  name: adCopy.headline,
-                  description: adCopy.description,
-                  call_to_action: {
-                    type: adCopy.callToAction || 'LEARN_MORE'
-                  },
-                  image_hash: finalImageHash
+          // Determine if this is a video ID or image hash
+          // Video IDs are numeric and typically 15+ digits long
+          const isVideoId = /^\d{15,}$/.test(creativeId);
+
+          console.log(`🎬 Creative type: ${isVideoId ? 'VIDEO' : 'IMAGE'} (${creativeId.substring(0, 20)}...)`);
+
+          let adData;
+
+          if (isVideoId) {
+            // Create video ad
+            adData = {
+              name: adName,
+              adset_id: adsetId,
+              creative: {
+                object_story_spec: {
+                  page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                  video_data: {
+                    video_id: creativeId,
+                    message: adCopy.primaryText,
+                    title: adCopy.headline,
+                    link_description: adCopy.description,
+                    call_to_action: {
+                      type: adCopy.callToAction || 'LEARN_MORE',
+                      value: {
+                        link: adCopy.landingPageUrl
+                      }
+                    }
+                  }
                 }
-              }
-            },
-            status: 'PAUSED'
-          };
+              },
+              status: 'PAUSED'
+            };
+          } else {
+            // Create image ad
+            // Use existing image hash from reference ad if creative ID is mock
+            let finalImageHash = creativeId;
+            if (creativeId.startsWith('mock_hash_') && existingImageHash) {
+              finalImageHash = existingImageHash;
+              console.log(`🔄 Replacing mock hash with existing image hash: ${finalImageHash}`);
+            }
+
+            adData = {
+              name: adName,
+              adset_id: adsetId,
+              creative: {
+                object_story_spec: {
+                  page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                  link_data: {
+                    link: adCopy.landingPageUrl,
+                    message: adCopy.primaryText,
+                    name: adCopy.headline,
+                    description: adCopy.description,
+                    call_to_action: {
+                      type: adCopy.callToAction || 'LEARN_MORE'
+                    },
+                    image_hash: finalImageHash
+                  }
+                }
+              },
+              status: 'PAUSED'
+            };
+          }
 
           // Create the actual ad using Meta API
           const newAd = await metaService.createAd(adData);
@@ -707,35 +741,69 @@ router.post('/create-duplicate-adset', async (req, res) => {
             
             console.log(`📝 Creating ad in AdSet ${adsetNumber}: ${adName}`);
             
-            // Use existing image hash from reference ad if creative ID is mock
-            let finalImageHash = creativeId;
-            const existingImageHash = referenceAd?.creative?.object_story_spec?.link_data?.image_hash;
-            if (creativeId.startsWith('mock_hash_') && existingImageHash) {
-              finalImageHash = existingImageHash;
-              console.log(`🔄 Replacing mock hash with existing image hash: ${finalImageHash}`);
-            }
-            
-            // Create the ad using Meta API
-            const adData = {
-              name: adName,
-              adset_id: newAdsetId,
-              creative: {
-                object_story_spec: {
-                  page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
-                  link_data: {
-                    link: adCopy.landingPageUrl,
-                    message: adCopy.primaryText,
-                    name: adCopy.headline,
-                    description: adCopy.description,
-                    call_to_action: {
-                      type: adCopy.callToAction || 'LEARN_MORE'
-                    },
-                    image_hash: finalImageHash
+            // Determine if this is a video ID or image hash
+            // Video IDs are numeric and typically 15+ digits long
+            const isVideoId = /^\d{15,}$/.test(creativeId);
+
+            console.log(`🎬 Creative type: ${isVideoId ? 'VIDEO' : 'IMAGE'} (${creativeId.substring(0, 20)}...)`);
+
+            let adData;
+
+            if (isVideoId) {
+              // Create video ad
+              adData = {
+                name: adName,
+                adset_id: newAdsetId,
+                creative: {
+                  object_story_spec: {
+                    page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                    video_data: {
+                      video_id: creativeId,
+                      message: adCopy.primaryText,
+                      title: adCopy.headline,
+                      link_description: adCopy.description,
+                      call_to_action: {
+                        type: adCopy.callToAction || 'LEARN_MORE',
+                        value: {
+                          link: adCopy.landingPageUrl
+                        }
+                      }
+                    }
                   }
-                }
-              },
-              status: 'PAUSED'
-            };
+                },
+                status: 'PAUSED'
+              };
+            } else {
+              // Create image ad
+              // Use existing image hash from reference ad if creative ID is mock
+              let finalImageHash = creativeId;
+              const existingImageHash = referenceAd?.creative?.object_story_spec?.link_data?.image_hash;
+              if (creativeId.startsWith('mock_hash_') && existingImageHash) {
+                finalImageHash = existingImageHash;
+                console.log(`🔄 Replacing mock hash with existing image hash: ${finalImageHash}`);
+              }
+
+              adData = {
+                name: adName,
+                adset_id: newAdsetId,
+                creative: {
+                  object_story_spec: {
+                    page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                    link_data: {
+                      link: adCopy.landingPageUrl,
+                      message: adCopy.primaryText,
+                      name: adCopy.headline,
+                      description: adCopy.description,
+                      call_to_action: {
+                        type: adCopy.callToAction || 'LEARN_MORE'
+                      },
+                      image_hash: finalImageHash
+                    }
+                  }
+                },
+                status: 'PAUSED'
+              };
+            }
 
             // Create the actual ad using Meta API
             const newAd = await metaService.createAd(adData);
