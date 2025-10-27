@@ -29,7 +29,7 @@ async function uploadVideoToMeta(filePath, fileName) {
 
         // Method 1: Upload with file stream (recommended for large files)
         const videoData = await account.createAdVideo([], {
-            source: fs.createReadStream(filePath),
+            filename: fs.createReadStream(filePath),
             name: fileName
         });
 
@@ -53,11 +53,11 @@ async function uploadVideoToMeta(filePath, fileName) {
 
         // Fallback: Try with direct file buffer for smaller files
         try {
-            console.log(`🔄 Trying alternative upload method...`);
+            console.log(`🔄 Trying alternative upload method with buffer...`);
             const fileBuffer = fs.readFileSync(filePath);
 
             const videoData = await account.createAdVideo([], {
-                source: fileBuffer,
+                file_url: fileBuffer,
                 name: fileName
             });
 
