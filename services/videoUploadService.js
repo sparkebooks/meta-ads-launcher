@@ -15,7 +15,7 @@ FacebookAdsApi.init(process.env.META_ACCESS_TOKEN);
 const account = new AdAccount(process.env.META_AD_ACCOUNT_ID);
 
 /**
- * Upload a video file to Meta Ads using direct HTTP API
+ * Upload a video file to Meta Ads using resumable upload for large files
  * @param {string} filePath - Path to the video file
  * @param {string} fileName - Original filename
  * @returns {Promise<Object>} Object with videoId and thumbnailUrl
@@ -27,9 +27,16 @@ async function uploadVideoToMeta(filePath, fileName) {
         // Get file size for logging
         const stats = fs.statSync(filePath);
         const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-        console.log(`📊 Video size: ${fileSizeInMB} MB`);
+        const fileSizeBytes = stats.size;
+        console.log(`📊 Video size: ${fileSizeInMB} MB (${fileSizeBytes} bytes)`);
 
-        // Method 1: Direct HTTP API call with multipart form-data
+        // Use resumable upload for files larger than 50MB
+        if (fileSizeBytes > 50 * 1024 * 1024) {
+            console.log(`📦 File is large (>${fileSizeInMB}MB), using resumable upload...`);
+            return await uploadLargeVideoResumable(filePath, fileName, fileSizeBytes);
+        }
+
+        // Method 1: Direct HTTP API call with multipart form-data (for small files)
         console.log(`🔄 Attempting direct HTTP upload with form-data...`);
         const form = new FormData();
         form.append('source', fs.createReadStream(filePath));
@@ -44,7 +51,8 @@ async function uploadVideoToMeta(filePath, fileName) {
                     ...form.getHeaders()
                 },
                 maxContentLength: Infinity,
-                maxBodyLength: Infinity
+                maxBodyLength: Infinity,
+                timeout: 300000 // 5 minutes
             }
         );
 
@@ -80,43 +88,109 @@ async function uploadVideoToMeta(filePath, fileName) {
 
     } catch (error) {
         console.error(`❌ Video upload failed:`, error.response?.data || error.message);
+        throw new Error(`Video upload failed: ${error.response?.data?.error?.message || error.message}`);
+    }
+}
 
-        // Fallback: Try with SDK method
-        try {
-            console.log(`🔄 Trying SDK upload method...`);
+/**
+ * Upload large video using Meta's resumable upload API
+ * @param {string} filePath - Path to the video file
+ * @param {string} fileName - Original filename
+ * @param {number} fileSize - File size in bytes
+ * @returns {Promise<Object>} Object with videoId and thumbnailUrl
+ */
+async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
+    console.log(`🚀 Starting resumable upload for ${fileName}...`);
 
-            const videoData = await account.createAdVideo([], {
-                source: fs.createReadStream(filePath),
-                name: fileName
-            });
-
-            const videoId = videoData.id ||
-                           videoData.video_id ||
-                           videoData._data?.id;
-
-            if (!videoId) {
-                throw new Error('SDK method: No video ID in response');
+    try {
+        // Step 1: Initialize upload session
+        console.log(`📝 Step 1: Initializing upload session...`);
+        const initResponse = await axios.post(
+            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
+            null,
+            {
+                params: {
+                    upload_phase: 'start',
+                    file_size: fileSize,
+                    access_token: process.env.META_ACCESS_TOKEN
+                }
             }
+        );
 
-            console.log(`✅ SDK upload successful! Video ID: ${videoId}`);
+        const uploadSessionId = initResponse.data.upload_session_id;
+        const startOffset = initResponse.data.start_offset || 0;
+        const endOffset = initResponse.data.end_offset;
 
-            // Try to get thumbnail
-            const videoDetails = await checkVideoStatus(videoId);
-            const thumbnailUrl = videoDetails?.thumbnails?.data?.[0]?.uri ||
-                                videoDetails?.picture ||
-                                null;
+        console.log(`✅ Upload session created: ${uploadSessionId}`);
+        console.log(`📍 Upload range: ${startOffset} - ${endOffset}`);
 
-            return {
-                videoId,
-                thumbnailUrl
-            };
+        // Step 2: Upload video file
+        console.log(`📤 Step 2: Uploading video data...`);
+        const fileBuffer = fs.readFileSync(filePath);
 
-        } catch (fallbackError) {
-            console.error(`❌ All video upload methods failed`);
-            const errorDetails = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-            const fallbackDetails = fallbackError.response?.data ? JSON.stringify(fallbackError.response.data) : fallbackError.message;
-            throw new Error(`Video upload failed: ${errorDetails}. Fallback also failed: ${fallbackDetails}`);
+        const uploadResponse = await axios.post(
+            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
+            fileBuffer,
+            {
+                params: {
+                    upload_phase: 'transfer',
+                    upload_session_id: uploadSessionId,
+                    start_offset: startOffset,
+                    access_token: process.env.META_ACCESS_TOKEN
+                },
+                headers: {
+                    'Content-Type': 'application/octet-stream'
+                },
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity,
+                timeout: 600000 // 10 minutes for large files
+            }
+        );
+
+        console.log(`✅ Video data uploaded successfully`);
+
+        // Step 3: Finalize upload
+        console.log(`🏁 Step 3: Finalizing upload...`);
+        const finalizeResponse = await axios.post(
+            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
+            null,
+            {
+                params: {
+                    upload_phase: 'finish',
+                    upload_session_id: uploadSessionId,
+                    title: fileName,
+                    access_token: process.env.META_ACCESS_TOKEN
+                }
+            }
+        );
+
+        const videoId = finalizeResponse.data.video_id || finalizeResponse.data.id;
+
+        if (!videoId) {
+            throw new Error('Resumable upload completed but no video ID returned');
         }
+
+        console.log(`✅ Resumable upload complete! Video ID: ${videoId}`);
+
+        // Fetch thumbnail
+        console.log(`🖼️ Fetching auto-generated thumbnail...`);
+        const videoDetails = await checkVideoStatus(videoId);
+        const thumbnailUrl = videoDetails?.thumbnails?.data?.[0]?.uri ||
+                            videoDetails?.picture ||
+                            null;
+
+        if (thumbnailUrl) {
+            console.log(`✅ Auto-generated thumbnail URL: ${thumbnailUrl}`);
+        }
+
+        return {
+            videoId,
+            thumbnailUrl
+        };
+
+    } catch (error) {
+        console.error(`❌ Resumable upload failed:`, error.response?.data || error.message);
+        throw new Error(`Resumable upload failed: ${error.response?.data?.error?.message || error.message}`);
     }
 }
 
