@@ -51,7 +51,7 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: (process.env.MAX_FILE_SIZE_MB || 50) * 1024 * 1024 // Convert MB to bytes
+    fileSize: (process.env.MAX_FILE_SIZE_MB || 250) * 1024 * 1024 // Convert MB to bytes (250MB default)
   }
 });
 

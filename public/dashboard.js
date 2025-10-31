@@ -1670,15 +1670,35 @@ class MetaAdsDashboard {
     // File upload handling
     handleFileUpload(files) {
         console.log('📤 handleFileUpload() called with files:', files.length);
-        
-        this.uploadedFiles = Array.from(files);
-        
+
+        // Make upload cumulative - add new files to existing ones
+        const newFiles = Array.from(files);
+
+        // Filter out duplicates based on file name and size
+        const existingFileKeys = new Set(
+            this.uploadedFiles.map(f => `${f.name}_${f.size}`)
+        );
+
+        const uniqueNewFiles = newFiles.filter(file => {
+            const fileKey = `${file.name}_${file.size}`;
+            return !existingFileKeys.has(fileKey);
+        });
+
+        if (uniqueNewFiles.length < newFiles.length) {
+            const duplicateCount = newFiles.length - uniqueNewFiles.length;
+            console.log(`⚠️ Skipped ${duplicateCount} duplicate file(s)`);
+            this.showAlert(`Skipped ${duplicateCount} duplicate file(s)`, 'warning');
+        }
+
+        // Add unique new files to existing files
+        this.uploadedFiles = [...this.uploadedFiles, ...uniqueNewFiles];
+
         // Update both tabs' displays
         this.updateFileDisplay();
         this.updateCreateAdsButton();
         this.updateAdSetCreationInfo();
-        
-        console.log('✅ Files uploaded:', this.uploadedFiles.map(f => f.name));
+
+        console.log('✅ Total files uploaded:', this.uploadedFiles.map(f => f.name));
     }
 
     updateFileDisplay() {
@@ -1702,7 +1722,7 @@ class MetaAdsDashboard {
                     <strong>${file.name}</strong>
                     <span style="color: #718096; margin-left: 0.5rem;">(${(file.size / 1024 / 1024).toFixed(2)} MB)</span>
                 </div>
-                <button onclick="dashboard.removeFile(${index})" style="background: #fed7d7; color: #c53030; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">Remove</button>
+                <button class="remove-file-btn" data-index="${index}" style="background: #fed7d7; color: #c53030; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">Remove</button>
             </div>
         `).join('');
 
@@ -1710,19 +1730,36 @@ class MetaAdsDashboard {
         if (filesListElement) {
             filesListElement.innerHTML = filesHtml;
             uploadedFilesElement.classList.remove('hidden');
+            // Add event listeners to remove buttons
+            this.attachRemoveButtonListeners(filesListElement);
         }
-        
+
         if (filesListElementDuplicate) {
             filesListElementDuplicate.innerHTML = filesHtml;
             uploadedFilesElementDuplicate.classList.remove('hidden');
+            // Add event listeners to remove buttons
+            this.attachRemoveButtonListeners(filesListElementDuplicate);
         }
     }
 
     removeFile(index) {
+        console.log(`🗑️ Removing file at index ${index}`);
         this.uploadedFiles.splice(index, 1);
         this.updateFileDisplay();
         this.updateCreateAdsButton();
         this.updateAdSetCreationInfo();
+        this.showAlert('File removed', 'success');
+    }
+
+    attachRemoveButtonListeners(container) {
+        const removeButtons = container.querySelectorAll('.remove-file-btn');
+        removeButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const index = parseInt(button.getAttribute('data-index'));
+                this.removeFile(index);
+            });
+        });
     }
 
     showAlert(message, type = 'info') {
