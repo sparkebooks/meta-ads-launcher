@@ -113,7 +113,8 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                     upload_phase: 'start',
                     file_size: fileSize,
                     access_token: process.env.META_ACCESS_TOKEN
-                }
+                },
+                timeout: 30000
             }
         );
 
@@ -123,13 +124,13 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
         let endOffset = parseInt(initResponse.data.end_offset, 10);
 
         console.log(`✅ Upload session created: ${uploadSessionId}`);
-        console.log(`📍 Total file size: ${fileSize} bytes`);
-        console.log(`📍 First chunk range: ${startOffset} - ${endOffset}`);
+        console.log(`📍 Total file size: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+        console.log(`📍 Meta's recommended chunk size: ${endOffset - startOffset} bytes (${((endOffset - startOffset) / 1024 / 1024).toFixed(2)} MB)`);
 
         // Step 2: Upload video file in chunks (keep file open for speed)
         console.log(`📤 Step 2: Uploading video data in chunks...`);
 
-        let currentOffset = startOffset;
+        let currentOffset = 0;
         let chunkNumber = 1;
         let fileHandle;
 
@@ -138,8 +139,8 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
             fileHandle = await fs.promises.open(filePath, 'r');
 
             while (currentOffset < fileSize) {
-                // Calculate chunk size (upload from currentOffset to endOffset)
-                const chunkSize = Math.min(endOffset - currentOffset, fileSize - currentOffset);
+                // Use Meta's recommended chunk size (typically 10MB)
+                const chunkSize = Math.min(endOffset - startOffset, fileSize - currentOffset);
 
                 console.log(`📦 Chunk ${chunkNumber}: uploading bytes ${currentOffset} to ${currentOffset + chunkSize} (${(chunkSize / 1024 / 1024).toFixed(2)} MB)`);
 
@@ -147,37 +148,58 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                 const chunkBuffer = Buffer.alloc(chunkSize);
                 await fileHandle.read(chunkBuffer, 0, chunkSize, currentOffset);
 
-                // Upload this chunk immediately
-                const uploadResponse = await axios.post(
-                    `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
-                    chunkBuffer,
-                    {
-                        params: {
-                            upload_phase: 'transfer',
-                            upload_session_id: uploadSessionId,
-                            start_offset: currentOffset,
-                            access_token: process.env.META_ACCESS_TOKEN
-                        },
-                        headers: {
-                            'Content-Type': 'application/octet-stream'
-                        },
-                        maxContentLength: Infinity,
-                        maxBodyLength: Infinity,
-                        timeout: 120000 // 2 minutes per chunk
+                // Upload this chunk with retry logic
+                let uploadSuccess = false;
+                let retries = 0;
+                const maxRetries = 3;
+
+                while (!uploadSuccess && retries < maxRetries) {
+                    try {
+                        const uploadResponse = await axios.post(
+                            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
+                            chunkBuffer,
+                            {
+                                params: {
+                                    upload_phase: 'transfer',
+                                    upload_session_id: uploadSessionId,
+                                    start_offset: currentOffset,
+                                    access_token: process.env.META_ACCESS_TOKEN
+                                },
+                                headers: {
+                                    'Content-Type': 'application/octet-stream',
+                                    'Content-Length': chunkSize
+                                },
+                                maxContentLength: Infinity,
+                                maxBodyLength: Infinity,
+                                timeout: 300000, // 5 minutes per chunk
+                                // Disable compression to avoid overhead
+                                decompress: false
+                            }
+                        );
+
+                        console.log(`✅ Chunk ${chunkNumber} uploaded successfully`);
+                        uploadSuccess = true;
+
+                        // Update offset for next chunk
+                        currentOffset += chunkSize;
+                        chunkNumber++;
+
+                        // Check if Meta provides new offsets for next chunk
+                        if (uploadResponse.data.start_offset !== undefined && uploadResponse.data.end_offset !== undefined) {
+                            startOffset = parseInt(uploadResponse.data.start_offset, 10);
+                            endOffset = parseInt(uploadResponse.data.end_offset, 10);
+                            console.log(`📍 Next chunk range: ${startOffset} - ${endOffset} (${((endOffset - startOffset) / 1024 / 1024).toFixed(2)} MB)`);
+                        }
+
+                    } catch (error) {
+                        retries++;
+                        if (retries < maxRetries) {
+                            console.log(`⚠️ Chunk ${chunkNumber} failed, retrying (${retries}/${maxRetries})...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000 * retries)); // Exponential backoff
+                        } else {
+                            throw error;
+                        }
                     }
-                );
-
-                console.log(`✅ Chunk ${chunkNumber} uploaded successfully`);
-
-                // Update offset for next chunk
-                currentOffset += chunkSize;
-                chunkNumber++;
-
-                // Check if we need to get new offsets from Meta (convert strings to integers)
-                if (uploadResponse.data.start_offset !== undefined && uploadResponse.data.end_offset !== undefined) {
-                    startOffset = parseInt(uploadResponse.data.start_offset, 10);
-                    endOffset = parseInt(uploadResponse.data.end_offset, 10);
-                    console.log(`📍 Next chunk range: ${startOffset} - ${endOffset}`);
                 }
 
                 // If we've uploaded everything, break
@@ -209,7 +231,8 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                     upload_session_id: uploadSessionId,
                     title: fileName,
                     access_token: process.env.META_ACCESS_TOKEN
-                }
+                },
+                timeout: 30000
             }
         );
 
