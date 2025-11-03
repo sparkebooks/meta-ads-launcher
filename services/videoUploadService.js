@@ -118,11 +118,13 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
         );
 
         const uploadSessionId = initResponse.data.upload_session_id;
-        let startOffset = initResponse.data.start_offset || 0;
-        let endOffset = initResponse.data.end_offset;
+        // Convert to integers - API returns strings
+        let startOffset = parseInt(initResponse.data.start_offset || '0', 10);
+        let endOffset = parseInt(initResponse.data.end_offset, 10);
 
         console.log(`✅ Upload session created: ${uploadSessionId}`);
         console.log(`📍 Total file size: ${fileSize} bytes`);
+        console.log(`📍 First chunk range: ${startOffset} - ${endOffset}`);
 
         // Step 2: Upload video file in chunks
         console.log(`📤 Step 2: Uploading video data in chunks...`);
@@ -137,42 +139,56 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
             console.log(`📦 Chunk ${chunkNumber}: uploading bytes ${currentOffset} to ${currentOffset + chunkSize} (${(chunkSize / 1024 / 1024).toFixed(2)} MB)`);
 
             // Read only the specific chunk from the file
-            const fileHandle = await fs.promises.open(filePath, 'r');
-            const chunkBuffer = Buffer.alloc(chunkSize);
-            await fileHandle.read(chunkBuffer, 0, chunkSize, currentOffset);
-            await fileHandle.close();
+            let fileHandle;
+            try {
+                fileHandle = await fs.promises.open(filePath, 'r');
+                const chunkBuffer = Buffer.alloc(chunkSize);
+                await fileHandle.read(chunkBuffer, 0, chunkSize, currentOffset);
+                await fileHandle.close();
+                fileHandle = null; // Mark as closed
 
-            // Upload this chunk
-            const uploadResponse = await axios.post(
-                `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
-                chunkBuffer,
-                {
-                    params: {
-                        upload_phase: 'transfer',
-                        upload_session_id: uploadSessionId,
-                        start_offset: currentOffset,
-                        access_token: process.env.META_ACCESS_TOKEN
-                    },
-                    headers: {
-                        'Content-Type': 'application/octet-stream'
-                    },
-                    maxContentLength: Infinity,
-                    maxBodyLength: Infinity,
-                    timeout: 600000 // 10 minutes
+                // Upload this chunk
+                const uploadResponse = await axios.post(
+                    `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
+                    chunkBuffer,
+                    {
+                        params: {
+                            upload_phase: 'transfer',
+                            upload_session_id: uploadSessionId,
+                            start_offset: currentOffset,
+                            access_token: process.env.META_ACCESS_TOKEN
+                        },
+                        headers: {
+                            'Content-Type': 'application/octet-stream'
+                        },
+                        maxContentLength: Infinity,
+                        maxBodyLength: Infinity,
+                        timeout: 600000 // 10 minutes
+                    }
+                );
+
+                console.log(`✅ Chunk ${chunkNumber} uploaded successfully`);
+
+                // Update offset for next chunk
+                currentOffset += chunkSize;
+                chunkNumber++;
+
+                // Check if we need to get new offsets from Meta (convert strings to integers)
+                if (uploadResponse.data.start_offset !== undefined && uploadResponse.data.end_offset !== undefined) {
+                    startOffset = parseInt(uploadResponse.data.start_offset, 10);
+                    endOffset = parseInt(uploadResponse.data.end_offset, 10);
+                    console.log(`📍 Next chunk range: ${startOffset} - ${endOffset}`);
                 }
-            );
-
-            console.log(`✅ Chunk ${chunkNumber} uploaded successfully`);
-
-            // Update offset for next chunk
-            currentOffset += chunkSize;
-            chunkNumber++;
-
-            // Check if we need to get new offsets from Meta
-            if (uploadResponse.data.start_offset !== undefined && uploadResponse.data.end_offset !== undefined) {
-                startOffset = uploadResponse.data.start_offset;
-                endOffset = uploadResponse.data.end_offset;
-                console.log(`📍 Next chunk range: ${startOffset} - ${endOffset}`);
+            } catch (error) {
+                // Make sure file handle is closed on error
+                if (fileHandle) {
+                    try {
+                        await fileHandle.close();
+                    } catch (closeError) {
+                        console.error('Error closing file handle:', closeError.message);
+                    }
+                }
+                throw error;
             }
 
             // If we've uploaded everything, break
