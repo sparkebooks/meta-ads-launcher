@@ -130,7 +130,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
         // Step 2: Upload video file in chunks (keep file open for speed)
         console.log(`📤 Step 2: Uploading video data in chunks...`);
 
-        let currentOffset = 0;
+        let currentOffset = startOffset; // Start from Meta's specified offset, not 0
         let chunkNumber = 1;
         let fileHandle;
 
@@ -139,8 +139,8 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
             fileHandle = await fs.promises.open(filePath, 'r');
 
             while (currentOffset < fileSize) {
-                // Use Meta's recommended chunk size (typically 10MB)
-                const chunkSize = Math.min(endOffset - startOffset, fileSize - currentOffset);
+                // Calculate how much to upload: from currentOffset to endOffset (or end of file)
+                const chunkSize = Math.min(endOffset - currentOffset, fileSize - currentOffset);
 
                 console.log(`📦 Chunk ${chunkNumber}: uploading bytes ${currentOffset} to ${currentOffset + chunkSize} (${(chunkSize / 1024 / 1024).toFixed(2)} MB)`);
 
