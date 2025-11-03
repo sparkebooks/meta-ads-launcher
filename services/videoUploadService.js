@@ -126,28 +126,28 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
         console.log(`📍 Total file size: ${fileSize} bytes`);
         console.log(`📍 First chunk range: ${startOffset} - ${endOffset}`);
 
-        // Step 2: Upload video file in chunks
+        // Step 2: Upload video file in chunks (keep file open for speed)
         console.log(`📤 Step 2: Uploading video data in chunks...`);
 
         let currentOffset = startOffset;
         let chunkNumber = 1;
+        let fileHandle;
 
-        while (currentOffset < fileSize) {
-            // Calculate chunk size (upload from currentOffset to endOffset)
-            const chunkSize = Math.min(endOffset - currentOffset, fileSize - currentOffset);
+        try {
+            // Open file once and keep it open for all chunks
+            fileHandle = await fs.promises.open(filePath, 'r');
 
-            console.log(`📦 Chunk ${chunkNumber}: uploading bytes ${currentOffset} to ${currentOffset + chunkSize} (${(chunkSize / 1024 / 1024).toFixed(2)} MB)`);
+            while (currentOffset < fileSize) {
+                // Calculate chunk size (upload from currentOffset to endOffset)
+                const chunkSize = Math.min(endOffset - currentOffset, fileSize - currentOffset);
 
-            // Read only the specific chunk from the file
-            let fileHandle;
-            try {
-                fileHandle = await fs.promises.open(filePath, 'r');
+                console.log(`📦 Chunk ${chunkNumber}: uploading bytes ${currentOffset} to ${currentOffset + chunkSize} (${(chunkSize / 1024 / 1024).toFixed(2)} MB)`);
+
+                // Read chunk from file
                 const chunkBuffer = Buffer.alloc(chunkSize);
                 await fileHandle.read(chunkBuffer, 0, chunkSize, currentOffset);
-                await fileHandle.close();
-                fileHandle = null; // Mark as closed
 
-                // Upload this chunk
+                // Upload this chunk immediately
                 const uploadResponse = await axios.post(
                     `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
                     chunkBuffer,
@@ -163,7 +163,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                         },
                         maxContentLength: Infinity,
                         maxBodyLength: Infinity,
-                        timeout: 600000 // 10 minutes
+                        timeout: 120000 // 2 minutes per chunk
                     }
                 );
 
@@ -179,22 +179,22 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                     endOffset = parseInt(uploadResponse.data.end_offset, 10);
                     console.log(`📍 Next chunk range: ${startOffset} - ${endOffset}`);
                 }
-            } catch (error) {
-                // Make sure file handle is closed on error
-                if (fileHandle) {
-                    try {
-                        await fileHandle.close();
-                    } catch (closeError) {
-                        console.error('Error closing file handle:', closeError.message);
-                    }
-                }
-                throw error;
-            }
 
-            // If we've uploaded everything, break
-            if (currentOffset >= fileSize) {
-                console.log(`✅ All chunks uploaded (${currentOffset} / ${fileSize} bytes)`);
-                break;
+                // If we've uploaded everything, break
+                if (currentOffset >= fileSize) {
+                    console.log(`✅ All chunks uploaded (${currentOffset} / ${fileSize} bytes)`);
+                    break;
+                }
+            }
+        } finally {
+            // Always close file handle
+            if (fileHandle) {
+                try {
+                    await fileHandle.close();
+                    console.log(`📁 File closed`);
+                } catch (closeError) {
+                    console.error('⚠️ Error closing file handle:', closeError.message);
+                }
             }
         }
 
