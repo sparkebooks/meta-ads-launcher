@@ -105,6 +105,9 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
     try {
         // Step 1: Initialize upload session
         console.log(`📝 Step 1: Initializing upload session...`);
+        console.log(`   - File size: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+        console.log(`   - Ad Account: ${process.env.META_AD_ACCOUNT_ID}`);
+
         const initResponse = await axios.post(
             `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
             null,
@@ -118,6 +121,8 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
             }
         );
 
+        console.log(`📥 Init response:`, JSON.stringify(initResponse.data, null, 2));
+
         const uploadSessionId = initResponse.data.upload_session_id;
         // Convert to integers - API returns strings
         let startOffset = parseInt(initResponse.data.start_offset || '0', 10);
@@ -125,7 +130,9 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
 
         console.log(`✅ Upload session created: ${uploadSessionId}`);
         console.log(`📍 Total file size: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-        console.log(`📍 Meta's recommended chunk size: ${endOffset - startOffset} bytes (${((endOffset - startOffset) / 1024 / 1024).toFixed(2)} MB)`);
+        console.log(`📍 Meta's start_offset: ${startOffset} (parsed from "${initResponse.data.start_offset}")`);
+        console.log(`📍 Meta's end_offset: ${endOffset} (parsed from "${initResponse.data.end_offset}")`);
+        console.log(`📍 Calculated chunk size: ${endOffset - startOffset} bytes (${((endOffset - startOffset) / 1024 / 1024).toFixed(2)} MB)`);
 
         // Step 2: Upload video file in chunks (keep file open for speed)
         console.log(`📤 Step 2: Uploading video data in chunks...`);
@@ -146,7 +153,20 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
 
                 // Read chunk from file
                 const chunkBuffer = Buffer.alloc(chunkSize);
-                await fileHandle.read(chunkBuffer, 0, chunkSize, currentOffset);
+                const readResult = await fileHandle.read(chunkBuffer, 0, chunkSize, currentOffset);
+
+                // Verify we read the expected number of bytes
+                console.log(`📖 Read ${readResult.bytesRead} bytes (expected ${chunkSize})`);
+                if (readResult.bytesRead !== chunkSize) {
+                    throw new Error(`Read mismatch: expected ${chunkSize} bytes but read ${readResult.bytesRead}`);
+                }
+
+                // Log first and last few bytes for debugging
+                const firstBytes = chunkBuffer.slice(0, 16).toString('hex');
+                const lastBytes = chunkBuffer.slice(-16).toString('hex');
+                console.log(`🔍 Buffer first 16 bytes: ${firstBytes}`);
+                console.log(`🔍 Buffer last 16 bytes: ${lastBytes}`);
+                console.log(`🔍 Buffer actual length: ${chunkBuffer.length}`);
 
                 // Upload this chunk with retry logic
                 let uploadSuccess = false;
@@ -155,6 +175,12 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
 
                 while (!uploadSuccess && retries < maxRetries) {
                     try {
+                        console.log(`📤 Sending chunk to Meta API...`);
+                        console.log(`   - URL: https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`);
+                        console.log(`   - Session ID: ${uploadSessionId}`);
+                        console.log(`   - Start offset: ${currentOffset}`);
+                        console.log(`   - Content-Length: ${chunkBuffer.length}`);
+
                         const uploadResponse = await axios.post(
                             `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
                             chunkBuffer,
@@ -167,7 +193,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                                 },
                                 headers: {
                                     'Content-Type': 'application/octet-stream',
-                                    'Content-Length': chunkSize
+                                    'Content-Length': chunkBuffer.length
                                 },
                                 maxContentLength: Infinity,
                                 maxBodyLength: Infinity,
@@ -178,6 +204,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                         );
 
                         console.log(`✅ Chunk ${chunkNumber} uploaded successfully`);
+                        console.log(`📥 Response:`, JSON.stringify(uploadResponse.data, null, 2));
                         uploadSuccess = true;
 
                         // Update offset for next chunk
@@ -193,10 +220,18 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
 
                     } catch (error) {
                         retries++;
+                        console.error(`❌ Chunk ${chunkNumber} upload error (attempt ${retries}/${maxRetries}):`);
+                        console.error(`   - Status: ${error.response?.status}`);
+                        console.error(`   - Status Text: ${error.response?.statusText}`);
+                        console.error(`   - Error Message: ${error.message}`);
+                        console.error(`   - Response Headers:`, error.response?.headers);
+                        console.error(`   - Response Data:`, JSON.stringify(error.response?.data, null, 2));
+
                         if (retries < maxRetries) {
-                            console.log(`⚠️ Chunk ${chunkNumber} failed, retrying (${retries}/${maxRetries})...`);
+                            console.log(`⚠️ Retrying chunk ${chunkNumber} in ${2000 * retries}ms...`);
                             await new Promise(resolve => setTimeout(resolve, 2000 * retries)); // Exponential backoff
                         } else {
+                            console.error(`❌ Chunk ${chunkNumber} failed after ${maxRetries} attempts`);
                             throw error;
                         }
                     }
