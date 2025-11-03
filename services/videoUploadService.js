@@ -93,7 +93,7 @@ async function uploadVideoToMeta(filePath, fileName) {
 }
 
 /**
- * Upload large video using Meta's resumable upload API
+ * Upload large video using Meta's resumable upload API with chunking
  * @param {string} filePath - Path to the video file
  * @param {string} fileName - Original filename
  * @param {number} fileSize - File size in bytes
@@ -118,36 +118,69 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
         );
 
         const uploadSessionId = initResponse.data.upload_session_id;
-        const startOffset = initResponse.data.start_offset || 0;
-        const endOffset = initResponse.data.end_offset;
+        let startOffset = initResponse.data.start_offset || 0;
+        let endOffset = initResponse.data.end_offset;
 
         console.log(`✅ Upload session created: ${uploadSessionId}`);
-        console.log(`📍 Upload range: ${startOffset} - ${endOffset}`);
+        console.log(`📍 Total file size: ${fileSize} bytes`);
 
-        // Step 2: Upload video file
-        console.log(`📤 Step 2: Uploading video data...`);
-        const fileBuffer = fs.readFileSync(filePath);
+        // Step 2: Upload video file in chunks
+        console.log(`📤 Step 2: Uploading video data in chunks...`);
 
-        const uploadResponse = await axios.post(
-            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
-            fileBuffer,
-            {
-                params: {
-                    upload_phase: 'transfer',
-                    upload_session_id: uploadSessionId,
-                    start_offset: startOffset,
-                    access_token: process.env.META_ACCESS_TOKEN
-                },
-                headers: {
-                    'Content-Type': 'application/octet-stream'
-                },
-                maxContentLength: Infinity,
-                maxBodyLength: Infinity,
-                timeout: 600000 // 10 minutes for large files
+        let currentOffset = startOffset;
+        let chunkNumber = 1;
+
+        while (currentOffset < fileSize) {
+            // Calculate chunk size (upload from currentOffset to endOffset)
+            const chunkSize = Math.min(endOffset - currentOffset, fileSize - currentOffset);
+
+            console.log(`📦 Chunk ${chunkNumber}: uploading bytes ${currentOffset} to ${currentOffset + chunkSize} (${(chunkSize / 1024 / 1024).toFixed(2)} MB)`);
+
+            // Read only the specific chunk from the file
+            const fileHandle = await fs.promises.open(filePath, 'r');
+            const chunkBuffer = Buffer.alloc(chunkSize);
+            await fileHandle.read(chunkBuffer, 0, chunkSize, currentOffset);
+            await fileHandle.close();
+
+            // Upload this chunk
+            const uploadResponse = await axios.post(
+                `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
+                chunkBuffer,
+                {
+                    params: {
+                        upload_phase: 'transfer',
+                        upload_session_id: uploadSessionId,
+                        start_offset: currentOffset,
+                        access_token: process.env.META_ACCESS_TOKEN
+                    },
+                    headers: {
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    maxContentLength: Infinity,
+                    maxBodyLength: Infinity,
+                    timeout: 600000 // 10 minutes
+                }
+            );
+
+            console.log(`✅ Chunk ${chunkNumber} uploaded successfully`);
+
+            // Update offset for next chunk
+            currentOffset += chunkSize;
+            chunkNumber++;
+
+            // Check if we need to get new offsets from Meta
+            if (uploadResponse.data.start_offset !== undefined && uploadResponse.data.end_offset !== undefined) {
+                startOffset = uploadResponse.data.start_offset;
+                endOffset = uploadResponse.data.end_offset;
+                console.log(`📍 Next chunk range: ${startOffset} - ${endOffset}`);
             }
-        );
 
-        console.log(`✅ Video data uploaded successfully`);
+            // If we've uploaded everything, break
+            if (currentOffset >= fileSize) {
+                console.log(`✅ All chunks uploaded (${currentOffset} / ${fileSize} bytes)`);
+                break;
+            }
+        }
 
         // Step 3: Finalize upload
         console.log(`🏁 Step 3: Finalizing upload...`);
