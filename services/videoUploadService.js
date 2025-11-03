@@ -124,11 +124,13 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
         console.log(`📥 Init response:`, JSON.stringify(initResponse.data, null, 2));
 
         const uploadSessionId = initResponse.data.upload_session_id;
+        const videoId = initResponse.data.video_id; // Video ID is returned in init phase!
         // Convert to integers - API returns strings
         let startOffset = parseInt(initResponse.data.start_offset || '0', 10);
         let endOffset = parseInt(initResponse.data.end_offset, 10);
 
         console.log(`✅ Upload session created: ${uploadSessionId}`);
+        console.log(`✅ Video ID: ${videoId}`);
         console.log(`📍 Total file size: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
         console.log(`📍 Meta's start_offset: ${startOffset} (parsed from "${initResponse.data.start_offset}")`);
         console.log(`📍 Meta's end_offset: ${endOffset} (parsed from "${initResponse.data.end_offset}")`);
@@ -261,6 +263,10 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
 
         // Step 3: Finalize upload
         console.log(`🏁 Step 3: Finalizing upload...`);
+        console.log(`   - Session ID: ${uploadSessionId}`);
+        console.log(`   - Video ID: ${videoId}`);
+        console.log(`   - Title: ${fileName}`);
+
         const finalizeResponse = await axios.post(
             `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
             null,
@@ -275,12 +281,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
             }
         );
 
-        const videoId = finalizeResponse.data.video_id || finalizeResponse.data.id;
-
-        if (!videoId) {
-            throw new Error('Resumable upload completed but no video ID returned');
-        }
-
+        console.log(`📥 Finalize response:`, JSON.stringify(finalizeResponse.data, null, 2));
         console.log(`✅ Resumable upload complete! Video ID: ${videoId}`);
 
         // Fetch thumbnail
