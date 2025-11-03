@@ -179,11 +179,18 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                         console.log(`   - URL: https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`);
                         console.log(`   - Session ID: ${uploadSessionId}`);
                         console.log(`   - Start offset: ${currentOffset}`);
-                        console.log(`   - Content-Length: ${chunkBuffer.length}`);
+                        console.log(`   - Chunk size: ${chunkBuffer.length}`);
+
+                        // Meta requires chunks to be sent as multipart/form-data with 'video_file_chunk' field
+                        const formData = new FormData();
+                        formData.append('video_file_chunk', chunkBuffer, {
+                            filename: 'chunk',
+                            contentType: 'application/octet-stream'
+                        });
 
                         const uploadResponse = await axios.post(
                             `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
-                            chunkBuffer,
+                            formData,
                             {
                                 params: {
                                     upload_phase: 'transfer',
@@ -192,14 +199,11 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
                                     access_token: process.env.META_ACCESS_TOKEN
                                 },
                                 headers: {
-                                    'Content-Type': 'application/octet-stream',
-                                    'Content-Length': chunkBuffer.length
+                                    ...formData.getHeaders()
                                 },
                                 maxContentLength: Infinity,
                                 maxBodyLength: Infinity,
                                 timeout: 300000, // 5 minutes per chunk
-                                // Disable compression to avoid overhead
-                                decompress: false
                             }
                         );
 
