@@ -449,8 +449,10 @@ router.post('/create-ads-batch', async (req, res) => {
         ]);
         
         console.log(`🔍 Creative details:`, JSON.stringify(creativeDetails, null, 2));
-        existingImageHash = creativeDetails?.object_story_spec?.link_data?.image_hash;
-        
+        // Check both link_data (for image ads) and video_data (for video ads)
+        existingImageHash = creativeDetails?.object_story_spec?.link_data?.image_hash ||
+                           creativeDetails?.object_story_spec?.video_data?.image_hash;
+
         if (existingImageHash) {
           console.log(`✅ Found image hash in creative details: ${existingImageHash}`);
         }
