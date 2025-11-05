@@ -430,9 +430,28 @@ router.post('/create-ads-batch', async (req, res) => {
     // Get reference ad details for configuration
     console.log('📋 Getting reference ad configuration...');
     const referenceAd = await metaService.getAdDetails(referenceAdId);
-    
+
     // Debug: Log the entire reference ad structure
     console.log(`🔍 Reference ad structure:`, JSON.stringify(referenceAd, null, 2));
+
+    // Detect if this is an app install ad or web conversion ad
+    console.log('🔍 Detecting ad type...');
+    const { AdSet } = require('facebook-nodejs-business-sdk');
+    const adset = new AdSet(adsetId);
+    const adsetDetails = await adset.read(['promoted_object', 'optimization_goal']);
+
+    const isAppInstallAd = !!adsetDetails.promoted_object?.application_id;
+    const appStoreUrl = adsetDetails.promoted_object?.object_store_url;
+
+    if (isAppInstallAd) {
+      console.log('📱 Detected: APP INSTALL AD');
+      console.log(`   - Application ID: ${adsetDetails.promoted_object.application_id}`);
+      console.log(`   - App Store URL: ${appStoreUrl}`);
+      console.log('   - Will use INSTALL_MOBILE_APP CTA and ignore CSV landing page URLs');
+    } else {
+      console.log('🌐 Detected: WEB CONVERSION AD');
+      console.log('   - Will use CSV landing page URLs and web CTAs');
+    }
     
     // Check if reference ad has an existing image hash we can reuse
     let existingImageHash = referenceAd?.creative?.object_story_spec?.link_data?.image_hash;
@@ -504,6 +523,13 @@ router.post('/create-ads-batch', async (req, res) => {
               console.log(`✅ Using auto-generated thumbnail: ${thumbnailUrl}`);
             }
 
+            // Determine CTA and link based on ad type
+            const ctaType = isAppInstallAd ? 'INSTALL_MOBILE_APP' : (adCopy.callToAction || 'LEARN_MORE');
+            const destinationLink = isAppInstallAd ? appStoreUrl : adCopy.landingPageUrl;
+
+            console.log(`   - CTA Type: ${ctaType}`);
+            console.log(`   - Destination: ${destinationLink}`);
+
             adData = {
               name: adName,
               adset_id: adsetId,
@@ -518,9 +544,9 @@ router.post('/create-ads-batch', async (req, res) => {
                     title: adCopy.headline,
                     link_description: adCopy.description,
                     call_to_action: {
-                      type: adCopy.callToAction || 'LEARN_MORE',
+                      type: ctaType,
                       value: {
-                        link: adCopy.landingPageUrl
+                        link: destinationLink
                       }
                     }
                   }
@@ -537,6 +563,23 @@ router.post('/create-ads-batch', async (req, res) => {
               console.log(`🔄 Replacing mock hash with existing image hash: ${finalImageHash}`);
             }
 
+            // Determine CTA and link based on ad type
+            const ctaType = isAppInstallAd ? 'INSTALL_MOBILE_APP' : (adCopy.callToAction || 'LEARN_MORE');
+            const destinationLink = isAppInstallAd ? appStoreUrl : adCopy.landingPageUrl;
+
+            console.log(`   - CTA Type: ${ctaType}`);
+            console.log(`   - Destination: ${destinationLink}`);
+
+            // For app install ads, CTA needs a value object; for web ads, it doesn't
+            const callToActionObj = isAppInstallAd ? {
+              type: ctaType,
+              value: {
+                link: destinationLink
+              }
+            } : {
+              type: ctaType
+            };
+
             adData = {
               name: adName,
               adset_id: adsetId,
@@ -544,13 +587,11 @@ router.post('/create-ads-batch', async (req, res) => {
                 object_story_spec: {
                   page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
                   link_data: {
-                    link: adCopy.landingPageUrl,
+                    link: destinationLink,
                     message: adCopy.primaryText,
                     name: adCopy.headline,
                     description: adCopy.description,
-                    call_to_action: {
-                      type: adCopy.callToAction || 'LEARN_MORE'
-                    },
+                    call_to_action: callToActionObj,
                     image_hash: finalImageHash
                   }
                 }
@@ -671,7 +712,22 @@ router.post('/create-duplicate-adset', async (req, res) => {
     // Get reference ad details for creative settings
     console.log('📋 Getting reference ad configuration...');
     const referenceAd = await metaService.getAdDetails(referenceAdId);
-    
+
+    // Detect if this is an app install ad or web conversion ad
+    console.log('🔍 Detecting ad type from reference adset...');
+    const isAppInstallAd = !!adsetDetails.promoted_object?.application_id;
+    const appStoreUrl = adsetDetails.promoted_object?.object_store_url;
+
+    if (isAppInstallAd) {
+      console.log('📱 Detected: APP INSTALL AD');
+      console.log(`   - Application ID: ${adsetDetails.promoted_object.application_id}`);
+      console.log(`   - App Store URL: ${appStoreUrl}`);
+      console.log('   - Will use INSTALL_MOBILE_APP CTA and ignore CSV landing page URLs');
+    } else {
+      console.log('🌐 Detected: WEB CONVERSION AD');
+      console.log('   - Will use CSV landing page URLs and web CTAs');
+    }
+
     const results = [];
     let totalAdsCreated = 0;
     let failedAds = 0;
@@ -766,7 +822,9 @@ router.post('/create-duplicate-adset', async (req, res) => {
             console.log(`🎬 Creative type: ${isVideoId ? 'VIDEO' : 'IMAGE'} (${creativeId.substring(0, 20)}...)`);
 
             // Get existing image hash for use as video thumbnail or fallback
-            const existingImageHash = referenceAd?.creative?.object_story_spec?.link_data?.image_hash;
+            // Check both link_data (for image ads) and video_data (for video ads)
+            const existingImageHash = referenceAd?.creative?.object_story_spec?.link_data?.image_hash ||
+                                     referenceAd?.creative?.object_story_spec?.video_data?.image_hash;
 
             let adData;
 
@@ -786,6 +844,13 @@ router.post('/create-duplicate-adset', async (req, res) => {
                 console.log(`✅ Using auto-generated thumbnail: ${thumbnailUrl}`);
               }
 
+              // Determine CTA and link based on ad type
+              const ctaType = isAppInstallAd ? 'INSTALL_MOBILE_APP' : (adCopy.callToAction || 'LEARN_MORE');
+              const destinationLink = isAppInstallAd ? appStoreUrl : adCopy.landingPageUrl;
+
+              console.log(`   - CTA Type: ${ctaType}`);
+              console.log(`   - Destination: ${destinationLink}`);
+
               adData = {
                 name: adName,
                 adset_id: newAdsetId,
@@ -800,9 +865,9 @@ router.post('/create-duplicate-adset', async (req, res) => {
                       title: adCopy.headline,
                       link_description: adCopy.description,
                       call_to_action: {
-                        type: adCopy.callToAction || 'LEARN_MORE',
+                        type: ctaType,
                         value: {
-                          link: adCopy.landingPageUrl
+                          link: destinationLink
                         }
                       }
                     }
@@ -819,6 +884,23 @@ router.post('/create-duplicate-adset', async (req, res) => {
                 console.log(`🔄 Replacing mock hash with existing image hash: ${finalImageHash}`);
               }
 
+              // Determine CTA and link based on ad type
+              const ctaType = isAppInstallAd ? 'INSTALL_MOBILE_APP' : (adCopy.callToAction || 'LEARN_MORE');
+              const destinationLink = isAppInstallAd ? appStoreUrl : adCopy.landingPageUrl;
+
+              console.log(`   - CTA Type: ${ctaType}`);
+              console.log(`   - Destination: ${destinationLink}`);
+
+              // For app install ads, CTA needs a value object; for web ads, it doesn't
+              const callToActionObj = isAppInstallAd ? {
+                type: ctaType,
+                value: {
+                  link: destinationLink
+                }
+              } : {
+                type: ctaType
+              };
+
               adData = {
                 name: adName,
                 adset_id: newAdsetId,
@@ -826,13 +908,11 @@ router.post('/create-duplicate-adset', async (req, res) => {
                   object_story_spec: {
                     page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
                     link_data: {
-                      link: adCopy.landingPageUrl,
+                      link: destinationLink,
                       message: adCopy.primaryText,
                       name: adCopy.headline,
                       description: adCopy.description,
-                      call_to_action: {
-                        type: adCopy.callToAction || 'LEARN_MORE'
-                      },
+                      call_to_action: callToActionObj,
                       image_hash: finalImageHash
                     }
                   }
