@@ -962,16 +962,29 @@ class MetaAdsDashboard {
             if (!uploadData.success) {
                 throw new Error('Failed to upload creative files');
             }
-            
+
+            // Create filename mapping: creativeId -> originalName
+            const creativeFilenames = {};
+            if (uploadData.files) {
+                uploadData.files.forEach(file => {
+                    const creativeId = file.metaHash || file.metaVideoId;
+                    if (creativeId && file.originalName) {
+                        creativeFilenames[creativeId] = file.originalName;
+                    }
+                });
+            }
+            console.log('📁 Creative filename mapping:', creativeFilenames);
+
             // Then create ads with the uploaded creatives and ad copy
             console.log('🎯 Creating ads with uploaded creatives and CSV ad copy...');
             console.log('📋 Payload for ad creation:', {
                 adsetId,
                 referenceAdId,
                 creativeIds: uploadData.creativeIds,
-                adCopyVariations: this.sheetsAdCopy
+                adCopyVariations: this.sheetsAdCopy,
+                creativeFilenames
             });
-            
+
             console.log(`📡 Calling: ${this.apiBase}/campaigns/create-ads-batch`);
             const createResponse = await fetch(`${this.apiBase}/campaigns/create-ads-batch`, {
                 method: 'POST',
@@ -980,7 +993,8 @@ class MetaAdsDashboard {
                     adsetId,
                     referenceAdId,
                     creativeIds: uploadData.creativeIds,
-                    adCopyVariations: this.sheetsAdCopy
+                    adCopyVariations: this.sheetsAdCopy,
+                    creativeFilenames
                 })
             });
             
@@ -1411,7 +1425,19 @@ class MetaAdsDashboard {
             }
             
             console.log('✅ Creative files uploaded successfully. Meta hashes:', uploadResult.creativeIds);
-            
+
+            // Create filename mapping: creativeId -> originalName
+            const creativeFilenames = {};
+            if (uploadResult.files) {
+                uploadResult.files.forEach(file => {
+                    const creativeId = file.metaHash || file.metaVideoId;
+                    if (creativeId && file.originalName) {
+                        creativeFilenames[creativeId] = file.originalName;
+                    }
+                });
+            }
+            console.log('📁 Creative filename mapping:', creativeFilenames);
+
             // Step 2: Create ads with uploaded creatives and CSV ad copy
             console.log('🎯 Creating ads with uploaded creatives and CSV ad copy...');
             const createResponse = await fetch(`${this.apiBase}/campaigns/create-ads-batch`, {
@@ -1421,7 +1447,8 @@ class MetaAdsDashboard {
                     adsetId: adsetId,
                     referenceAdId: referenceAdId,
                     creativeIds: uploadResult.creativeIds, // Meta image hashes
-                    adCopyVariations: this.sheetsAdCopy
+                    adCopyVariations: this.sheetsAdCopy,
+                    creativeFilenames
                 })
             });
             
@@ -2044,7 +2071,19 @@ class MetaAdsDashboard {
             }
             
             console.log('✅ Creative files uploaded successfully. Meta hashes:', uploadResult.creativeIds);
-            
+
+            // Create filename mapping: creativeId -> originalName
+            const creativeFilenames = {};
+            if (uploadResult.files) {
+                uploadResult.files.forEach(file => {
+                    const creativeId = file.metaHash || file.metaVideoId;
+                    if (creativeId && file.originalName) {
+                        creativeFilenames[creativeId] = file.originalName;
+                    }
+                });
+            }
+            console.log('📁 Creative filename mapping:', creativeFilenames);
+
             // Step 2: Create duplicate adset(s) with ads
             console.log('🎯 Creating duplicate adset(s) and ads...');
             const createResponse = await fetch(`${this.apiBase}/campaigns/create-duplicate-adset`, {
@@ -2056,7 +2095,8 @@ class MetaAdsDashboard {
                     referenceAdId: referenceAdId,
                     creativeIds: uploadResult.creativeIds, // Meta image hashes
                     adCopyVariations: this.sheetsAdCopy,
-                    maxAdsPerAdset: 50
+                    maxAdsPerAdset: 50,
+                    creativeFilenames
                 })
             });
             

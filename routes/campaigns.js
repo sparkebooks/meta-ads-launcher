@@ -401,14 +401,16 @@ router.post('/create-ads-batch', async (req, res) => {
       adsetId,
       referenceAdId,
       creativeIds,
-      adCopyVariations
+      adCopyVariations,
+      creativeFilenames  // New: mapping of creativeId -> original filename
     } = req.body;
 
     console.log('🚀 Starting batch ad creation:', {
       adsetId,
       referenceAdId,
       creativeCount: creativeIds?.length || 0,
-      adCopyCount: adCopyVariations?.length || 0
+      adCopyCount: adCopyVariations?.length || 0,
+      hasFilenameMapping: !!creativeFilenames
     });
 
     if (!adsetId || !referenceAdId) {
@@ -495,8 +497,10 @@ router.post('/create-ads-batch', async (req, res) => {
     for (const adCopy of adCopyVariations) {
       for (const creativeId of creativeIds) {
         try {
-          const adName = `${adCopy.bookId}_${adCopy.variation}_${creativeId.substring(0, 8)}`;
-          
+          // Use filename from mapping if available, otherwise fall back to old format
+          const filename = creativeFilenames?.[creativeId] || `creative_${creativeId.substring(0, 8)}`;
+          const adName = `${adCopy.bookId} - ${filename}`;
+
           console.log(`📝 Creating ad: ${adName}`);
           
           // Determine if this is a video ID or image hash
@@ -659,7 +663,8 @@ router.post('/create-duplicate-adset', async (req, res) => {
       referenceAdId,
       creativeIds,
       adCopyVariations,
-      maxAdsPerAdset = 50
+      maxAdsPerAdset = 50,
+      creativeFilenames  // New: mapping of creativeId -> original filename
     } = req.body;
 
     console.log('🚀 Starting duplicate adset creation:', {
@@ -668,7 +673,8 @@ router.post('/create-duplicate-adset', async (req, res) => {
       referenceAdId,
       creativeCount: creativeIds?.length || 0,
       adCopyCount: adCopyVariations?.length || 0,
-      maxAdsPerAdset
+      maxAdsPerAdset,
+      hasFilenameMapping: !!creativeFilenames
     });
 
     if (!campaignId || !referenceAdsetId || !referenceAdId) {
@@ -811,8 +817,10 @@ router.post('/create-duplicate-adset', async (req, res) => {
 
         for (const { adCopy, creativeId } of batchCombinations) {
           try {
-            const adName = `${adCopy.bookId}_${adCopy.variation}_${creativeId.substring(0, 8)}_AS${adsetNumber}`;
-            
+            // Use filename from mapping if available, otherwise fall back to old format
+            const filename = creativeFilenames?.[creativeId] || `creative_${creativeId.substring(0, 8)}`;
+            const adName = `${adCopy.bookId} - ${filename}`;
+
             console.log(`📝 Creating ad in AdSet ${adsetNumber}: ${adName}`);
             
             // Determine if this is a video ID or image hash
