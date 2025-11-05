@@ -604,7 +604,10 @@ router.post('/create-ads-batch', async (req, res) => {
             };
           }
 
-          // Create the actual ad using Meta API
+          // Log the complete ad data structure being sent
+          console.log(`📋 Complete ad data structure:`, JSON.stringify(adData, null, 2));
+
+          // Create the actual ad using Meta API (with verification)
           const newAd = await metaService.createAd(adData);
 
           results.push({
@@ -616,10 +619,11 @@ router.post('/create-ads-batch', async (req, res) => {
           });
 
           successful++;
-          console.log(`✅ Created ad: ${adName} (${newAd.id})`);
+          console.log(`✅ Created and verified ad: ${adName} (${newAd.id})`);
 
         } catch (error) {
           console.error(`❌ Failed to create ad for ${adCopy.variation} + ${creativeId}:`, error);
+          console.error(`   Full error:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
           
           results.push({
             adName: `${adCopy.bookId}_${adCopy.variation}_${creativeId.substring(0, 8)}`,

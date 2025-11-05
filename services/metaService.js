@@ -403,7 +403,7 @@ class MetaService {
   async createAd(adData) {
     try {
       console.log('🔨 Creating Meta ad with data:', JSON.stringify(adData, null, 2));
-      
+
       const adParams = {
         name: adData.name,
         adset_id: adData.adset_id,
@@ -413,9 +413,22 @@ class MetaService {
 
       // Use account to create ad directly
       const ad = await account.createAd([], adParams);
-      console.log('✅ Successfully created Meta ad:', ad.id);
-      
-      return ad;
+      console.log('✅ SDK returned ad ID:', ad.id);
+
+      // CRITICAL: Verify the ad actually exists in Meta
+      // The SDK sometimes returns success even if the ad wasn't created
+      try {
+        const verification = new Ad(ad.id);
+        await verification.read(['id', 'name', 'status']);
+        console.log('✅ Verified ad exists in Meta:', ad.id);
+        return ad;
+      } catch (verifyError) {
+        console.error('❌ Ad creation reported success but ad does NOT exist in Meta!');
+        console.error('   Attempted ad ID:', ad.id);
+        console.error('   Verification error:', verifyError.message);
+        throw new Error(`Ad creation failed verification: ${verifyError.message}`);
+      }
+
     } catch (error) {
       console.error('❌ Error creating Meta ad:', error);
       throw error;
