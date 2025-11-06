@@ -18,13 +18,14 @@ console.log(`📋 Meta API initialized with account: ${process.env.META_AD_ACCOU
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const { bookId, campaignType } = req.body;
-    const uploadPath = path.join(__dirname, '..', 'uploads', bookId || 'general', campaignType || 'default');
-    
+    // For upload-for-adset endpoint, use a simpler path
+    const uploadPath = path.join(__dirname, '..', 'uploads', 'temp');
+
     try {
       await fs.mkdir(uploadPath, { recursive: true });
       cb(null, uploadPath);
     } catch (error) {
+      console.error('Error creating upload directory:', error);
       cb(error);
     }
   },
@@ -37,9 +38,11 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
+  console.log(`🔍 Multer processing field: "${file.fieldname}" for file: ${file.originalname}`);
+
   const allowedTypes = process.env.ALLOWED_FILE_TYPES?.split(',') || ['jpg', 'jpeg', 'png', 'mp4', 'mov'];
   const fileExtension = path.extname(file.originalname).slice(1).toLowerCase();
-  
+
   if (allowedTypes.includes(fileExtension)) {
     cb(null, true);
   } else {
@@ -114,8 +117,29 @@ router.post('/upload', upload.array('creatives', 20), async (req, res) => {
 });
 
 // Upload creative files for specific adset (for ad creation workflow)
-router.post('/upload-for-adset', upload.array('creatives', 20), async (req, res) => {
+router.post('/upload-for-adset', (req, res, next) => {
   console.log('🔥 DEBUG: /upload-for-adset endpoint hit!');
+  console.log('📋 Request headers:', req.headers);
+
+  upload.array('creatives', 20)(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer error:', err);
+      console.error('   Error code:', err.code);
+      console.error('   Error field:', err.field);
+      console.error('   Error message:', err.message);
+
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({
+          error: `Unexpected field name: "${err.field}". Expected field name is "creatives"`,
+          details: 'Please ensure file uploads use field name "creatives"'
+        });
+      }
+
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     const { adsetId } = req.body;
     const uploadedFiles = [];
