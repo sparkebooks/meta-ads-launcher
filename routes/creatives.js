@@ -121,7 +121,7 @@ router.post('/upload-for-adset', (req, res, next) => {
   console.log('🔥 DEBUG: /upload-for-adset endpoint hit!');
   console.log('📋 Request headers:', req.headers);
 
-  upload.array('creatives', 20)(req, res, (err) => {
+  upload.array('creatives', 100)(req, res, (err) => {  // Increased from 20 to 100 files
     if (err) {
       console.error('❌ Multer error:', err);
       console.error('   Error code:', err.code);
