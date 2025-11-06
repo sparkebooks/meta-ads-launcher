@@ -351,6 +351,7 @@ router.post('/upload-for-adset', (req, res, next) => {
           }
         }
 
+        console.log(`📝 Mapping: creativeId="${fileInfo.metaVideoId || fileInfo.metaHash}" -> originalName="${fileInfo.originalName}"`);
         uploadedFiles.push(fileInfo);
         
       } catch (error) {
