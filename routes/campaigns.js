@@ -540,6 +540,7 @@ router.post('/create-ads-batch', async (req, res) => {
               creative: {
                 object_story_spec: {
                   page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                  instagram_user_id: referenceAd.creative?.object_story_spec?.instagram_user_id, // Copy Instagram ID if present
                   video_data: {
                     video_id: creativeId,
                     image_url: thumbnailUrl || undefined, // Use auto-generated thumbnail
@@ -590,6 +591,7 @@ router.post('/create-ads-batch', async (req, res) => {
               creative: {
                 object_story_spec: {
                   page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                  instagram_user_id: referenceAd.creative?.object_story_spec?.instagram_user_id, // Copy Instagram ID if present
                   link_data: {
                     link: destinationLink,
                     message: adCopy.primaryText,
@@ -869,6 +871,7 @@ router.post('/create-duplicate-adset', async (req, res) => {
                 creative: {
                   object_story_spec: {
                     page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                    instagram_user_id: referenceAd.creative?.object_story_spec?.instagram_user_id, // Copy Instagram ID if present
                     video_data: {
                       video_id: creativeId,
                       image_url: thumbnailUrl || undefined, // Use auto-generated thumbnail
@@ -919,6 +922,7 @@ router.post('/create-duplicate-adset', async (req, res) => {
                 creative: {
                   object_story_spec: {
                     page_id: referenceAd.creative?.object_story_spec?.page_id || process.env.META_PAGE_ID,
+                    instagram_user_id: referenceAd.creative?.object_story_spec?.instagram_user_id, // Copy Instagram ID if present
                     link_data: {
                       link: destinationLink,
                       message: adCopy.primaryText,
