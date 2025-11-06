@@ -401,37 +401,62 @@ class MetaService {
   }
 
   async createAd(adData) {
-    try {
-      console.log('🔨 Creating Meta ad with data:', JSON.stringify(adData, null, 2));
+    const maxRetries = 3;
+    const timeout = 30000; // 30 seconds per attempt
 
-      const adParams = {
-        name: adData.name,
-        adset_id: adData.adset_id,
-        creative: adData.creative,
-        status: adData.status || 'PAUSED'
-      };
-
-      // Use account to create ad directly
-      const ad = await account.createAd([], adParams);
-      console.log('✅ SDK returned ad ID:', ad.id);
-
-      // CRITICAL: Verify the ad actually exists in Meta
-      // The SDK sometimes returns success even if the ad wasn't created
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const verification = new Ad(ad.id);
-        await verification.read(['id', 'name', 'status']);
-        console.log('✅ Verified ad exists in Meta:', ad.id);
-        return ad;
-      } catch (verifyError) {
-        console.error('❌ Ad creation reported success but ad does NOT exist in Meta!');
-        console.error('   Attempted ad ID:', ad.id);
-        console.error('   Verification error:', verifyError.message);
-        throw new Error(`Ad creation failed verification: ${verifyError.message}`);
-      }
+        console.log(`🔨 Creating Meta ad (attempt ${attempt}/${maxRetries}):`, adData.name);
 
-    } catch (error) {
-      console.error('❌ Error creating Meta ad:', error);
-      throw error;
+        const adParams = {
+          name: adData.name,
+          adset_id: adData.adset_id,
+          creative: adData.creative,
+          status: adData.status || 'PAUSED'
+        };
+
+        // Wrap SDK call in a timeout promise
+        const createAdWithTimeout = () => {
+          return Promise.race([
+            account.createAd([], adParams),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Ad creation timeout after 30s')), timeout)
+            )
+          ]);
+        };
+
+        // Use account to create ad directly with timeout
+        const ad = await createAdWithTimeout();
+        console.log('✅ SDK returned ad ID:', ad.id);
+
+        // CRITICAL: Verify the ad actually exists in Meta
+        // The SDK sometimes returns success even if the ad wasn't created
+        try {
+          const verification = new Ad(ad.id);
+          await verification.read(['id', 'name', 'status']);
+          console.log('✅ Verified ad exists in Meta:', ad.id);
+          return ad;
+        } catch (verifyError) {
+          console.error('❌ Ad creation reported success but ad does NOT exist in Meta!');
+          console.error('   Attempted ad ID:', ad.id);
+          console.error('   Verification error:', verifyError.message);
+          throw new Error(`Ad creation failed verification: ${verifyError.message}`);
+        }
+
+      } catch (error) {
+        console.error(`❌ Attempt ${attempt}/${maxRetries} failed:`, error.message);
+
+        // If this is the last attempt, throw the error
+        if (attempt === maxRetries) {
+          console.error('❌ All retry attempts exhausted for ad:', adData.name);
+          throw error;
+        }
+
+        // Otherwise, wait before retrying (exponential backoff)
+        const waitTime = 2000 * attempt; // 2s, 4s, 6s
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
   }
 }
