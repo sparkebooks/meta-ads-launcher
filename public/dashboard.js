@@ -4,6 +4,7 @@ class MetaAdsDashboard {
         this.apiBase = '/api';
         this.uploadedFiles = [];
         this.sheetsAdCopy = [];
+        this.selectedAdAccountId = null; // Will be set to default from .env initially
         this.init();
     }
 
@@ -69,11 +70,23 @@ class MetaAdsDashboard {
         // Performance monitoring
         this.setupPerformanceMonitoring();
         
+        // Ad Account Selection
+        document.getElementById('ad-account-select').addEventListener('change', (e) => {
+            this.selectedAdAccountId = e.target.value;
+            console.log('🏦 Ad account changed to:', this.selectedAdAccountId);
+            this.loadCampaigns(); // Reload campaigns for the selected ad account
+        });
+        document.getElementById('ad-account-select-duplicate').addEventListener('change', (e) => {
+            this.selectedAdAccountId = e.target.value;
+            console.log('🏦 Ad account changed to:', this.selectedAdAccountId);
+            this.loadCampaigns(); // Reload campaigns for the selected ad account (populates both dropdowns)
+        });
+
         // Creative Upload & Ad Creation Tab - Existing AdSet
         document.getElementById('campaign-select').addEventListener('change', (e) => this.loadAdSets(e.target.value));
         document.getElementById('adset-select').addEventListener('change', (e) => this.loadReferenceAds(e.target.value));
-        
-        // Creative Upload & Ad Creation Tab - Duplicate AdSet  
+
+        // Creative Upload & Ad Creation Tab - Duplicate AdSet
         document.getElementById('campaign-select-duplicate').addEventListener('change', (e) => this.loadAdSetsDuplicate(e.target.value));
         document.getElementById('adset-select-duplicate').addEventListener('change', (e) => this.loadReferenceAdsDuplicate(e.target.value));
         
@@ -340,6 +353,8 @@ class MetaAdsDashboard {
     }
 
     async loadInitialData() {
+        // Load ad accounts first, then campaigns
+        await this.loadAdAccounts();
         await Promise.all([
             this.loadCampaigns()
             // Disabled monitoring status to prevent errors
@@ -594,6 +609,76 @@ class MetaAdsDashboard {
         }
     }
 
+    async loadAdAccounts() {
+        console.log('🏦 Loading ad accounts...');
+        try {
+            const adAccountSelect = document.getElementById('ad-account-select');
+            const adAccountSelectDuplicate = document.getElementById('ad-account-select-duplicate');
+
+            if (!adAccountSelect) {
+                throw new Error('Ad account select element not found');
+            }
+
+            adAccountSelect.innerHTML = '<option value="">Loading ad accounts...</option>';
+            adAccountSelectDuplicate.innerHTML = '<option value="">Loading ad accounts...</option>';
+
+            const response = await fetch(`${this.apiBase}/campaigns/ad-accounts`);
+            console.log('🏦 API Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('🏦 API Response data:', data);
+
+            if (!data.adAccounts || data.adAccounts.length === 0) {
+                adAccountSelect.innerHTML = '<option value="" disabled>No ad accounts found</option>';
+                adAccountSelectDuplicate.innerHTML = '<option value="" disabled>No ad accounts found</option>';
+                console.warn('⚠️ No ad accounts found in API response');
+                return;
+            }
+
+            // Clear and populate both dropdowns
+            adAccountSelect.innerHTML = '';
+            adAccountSelectDuplicate.innerHTML = '';
+
+            data.adAccounts.forEach((account, index) => {
+                const option = document.createElement('option');
+                option.value = account.id;
+                option.textContent = `${account.name} (${account.currency})`;
+
+                const optionDuplicate = option.cloneNode(true);
+
+                // Select the default account
+                if (account.isDefault) {
+                    option.selected = true;
+                    optionDuplicate.selected = true;
+                    this.selectedAdAccountId = account.id;
+                    console.log(`✅ Default ad account selected: ${account.name} (${account.id})`);
+                }
+
+                adAccountSelect.appendChild(option);
+                adAccountSelectDuplicate.appendChild(optionDuplicate);
+                console.log(`➕ Added ad account ${index + 1}: ${account.name}`);
+            });
+
+            console.log(`✅ Successfully loaded ${data.adAccounts.length} ad accounts`);
+
+        } catch (error) {
+            console.error('❌ Error loading ad accounts:', error);
+            const adAccountSelect = document.getElementById('ad-account-select');
+            const adAccountSelectDuplicate = document.getElementById('ad-account-select-duplicate');
+            if (adAccountSelect) {
+                adAccountSelect.innerHTML = '<option value="" disabled>Error loading ad accounts</option>';
+            }
+            if (adAccountSelectDuplicate) {
+                adAccountSelectDuplicate.innerHTML = '<option value="" disabled>Error loading ad accounts</option>';
+            }
+            this.showAlert('Error loading ad accounts: ' + error.message, 'error');
+        }
+    }
+
     async loadCampaigns() {
         console.log('📋 Loading campaigns...');
         try {
@@ -601,10 +686,12 @@ class MetaAdsDashboard {
             if (!campaignSelect) {
                 throw new Error('Campaign select element not found');
             }
-            
+
             campaignSelect.innerHTML = '<option value="">Loading campaigns...</option>';
-            
-            const response = await fetch(`${this.apiBase}/campaigns`);
+
+            // Send selected ad account as query parameter
+            const queryParams = this.selectedAdAccountId ? `?adAccountId=${encodeURIComponent(this.selectedAdAccountId)}` : '';
+            const response = await fetch(`${this.apiBase}/campaigns${queryParams}`);
             console.log('📊 API Response status:', response.status);
             
             if (!response.ok) {
@@ -948,6 +1035,7 @@ class MetaAdsDashboard {
                 console.log(`  - Adding file: ${file.name} (${file.size} bytes)`);
             }
             formData.append('adsetId', adsetId);
+            formData.append('adAccountId', this.selectedAdAccountId);  // Send selected ad account
             
             console.log(`📡 Calling: ${this.apiBase}/creatives/upload-for-adset`);
             const uploadResponse = await fetch(`${this.apiBase}/creatives/upload-for-adset`, {
@@ -994,7 +1082,8 @@ class MetaAdsDashboard {
                     referenceAdId,
                     creativeIds: uploadData.creativeIds,
                     adCopyVariations: this.sheetsAdCopy,
-                    creativeFilenames
+                    creativeFilenames,
+                    adAccountId: this.selectedAdAccountId  // Send selected ad account
                 })
             });
             
@@ -1412,7 +1501,8 @@ class MetaAdsDashboard {
                 formData.append('creatives', file);
             });
             formData.append('adsetId', adsetId);
-            
+            formData.append('adAccountId', this.selectedAdAccountId);  // Send selected ad account
+
             const uploadResponse = await fetch(`${this.apiBase}/creatives/upload-for-adset`, {
                 method: 'POST',
                 body: formData
@@ -1448,7 +1538,8 @@ class MetaAdsDashboard {
                     referenceAdId: referenceAdId,
                     creativeIds: uploadResult.creativeIds, // Meta image hashes
                     adCopyVariations: this.sheetsAdCopy,
-                    creativeFilenames
+                    creativeFilenames,
+                    adAccountId: this.selectedAdAccountId  // Send selected ad account
                 })
             });
             
@@ -1492,9 +1583,11 @@ class MetaAdsDashboard {
 
     async loadCampaigns() {
         try {
-            const response = await fetch(`${this.apiBase}/campaigns`);
+            // Send selected ad account as query parameter
+            const queryParams = this.selectedAdAccountId ? `?adAccountId=${encodeURIComponent(this.selectedAdAccountId)}` : '';
+            const response = await fetch(`${this.apiBase}/campaigns${queryParams}`);
             const data = await response.json();
-            
+
             // Populate both campaign dropdowns
             const campaignSelect = document.getElementById('campaign-select');
             const campaignSelectDuplicate = document.getElementById('campaign-select-duplicate');
@@ -2058,7 +2151,8 @@ class MetaAdsDashboard {
                 formData.append('creatives', file);
             });
             formData.append('adsetId', referenceAdsetId); // Use reference adset for image upload context
-            
+            formData.append('adAccountId', this.selectedAdAccountId);  // Send selected ad account
+
             const uploadResponse = await fetch(`${this.apiBase}/creatives/upload-for-adset`, {
                 method: 'POST',
                 body: formData
@@ -2096,7 +2190,8 @@ class MetaAdsDashboard {
                     creativeIds: uploadResult.creativeIds, // Meta image hashes
                     adCopyVariations: this.sheetsAdCopy,
                     maxAdsPerAdset: 50,
-                    creativeFilenames
+                    creativeFilenames,
+                    adAccountId: this.selectedAdAccountId  // Send selected ad account
                 })
             });
             
