@@ -446,6 +446,42 @@ class MetaService {
       } catch (error) {
         console.error(`❌ Attempt ${attempt}/${maxRetries} failed:`, error.message);
 
+        // CRITICAL: Before retrying, check if the ad was actually created
+        // Timeouts can mean the ad was created but we didn't get the response
+        console.log('🔍 Checking if ad already exists in Meta before retrying...');
+        try {
+          const { AdSet } = require('facebook-nodejs-business-sdk');
+          const adset = new AdSet(adData.adset_id);
+
+          // Get ads from this adset created in the last 5 minutes with matching name
+          const recentAds = await adset.getAds(['id', 'name', 'created_time'], {
+            filtering: JSON.stringify([{
+              field: 'name',
+              operator: 'EQUAL',
+              value: adData.name
+            }])
+          });
+
+          if (recentAds && recentAds.length > 0) {
+            const existingAd = recentAds[0];
+            console.log(`✅ Found existing ad with same name: ${existingAd.id}`);
+            console.log('   This ad was likely created by the previous attempt that timed out.');
+            console.log('   Using existing ad instead of creating duplicate.');
+
+            // Verify this ad exists
+            const verification = new Ad(existingAd.id);
+            await verification.read(['id', 'name', 'status']);
+            console.log('✅ Verified existing ad:', existingAd.id);
+
+            return existingAd;
+          } else {
+            console.log('   No existing ad found with this name. Safe to retry.');
+          }
+        } catch (checkError) {
+          console.error('⚠️  Could not check for existing ad:', checkError.message);
+          console.log('   Will proceed with retry...');
+        }
+
         // If this is the last attempt, throw the error
         if (attempt === maxRetries) {
           console.error('❌ All retry attempts exhausted for ad:', adData.name);
