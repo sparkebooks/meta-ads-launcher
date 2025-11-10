@@ -401,98 +401,85 @@ class MetaService {
   }
 
   async createAd(adData) {
-    const maxRetries = 3;
-    const timeout = 30000; // 30 seconds per attempt
+    const timeout = 60000; // 60 seconds - generous timeout for API calls
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔨 Creating Meta ad:`, adData.name);
+
+      const adParams = {
+        name: adData.name,
+        adset_id: adData.adset_id,
+        creative: adData.creative,
+        status: adData.status || 'PAUSED'
+      };
+
+      // Wrap SDK call in a timeout promise
+      const createAdWithTimeout = () => {
+        return Promise.race([
+          account.createAd([], adParams),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Ad creation timeout after 60s')), timeout)
+          )
+        ]);
+      };
+
+      // Use account to create ad directly with timeout
+      const ad = await createAdWithTimeout();
+      console.log('✅ SDK returned ad ID:', ad.id);
+
+      // CRITICAL: Verify the ad actually exists in Meta
+      // The SDK sometimes returns success even if the ad wasn't created
       try {
-        console.log(`🔨 Creating Meta ad (attempt ${attempt}/${maxRetries}):`, adData.name);
-
-        const adParams = {
-          name: adData.name,
-          adset_id: adData.adset_id,
-          creative: adData.creative,
-          status: adData.status || 'PAUSED'
-        };
-
-        // Wrap SDK call in a timeout promise
-        const createAdWithTimeout = () => {
-          return Promise.race([
-            account.createAd([], adParams),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Ad creation timeout after 30s')), timeout)
-            )
-          ]);
-        };
-
-        // Use account to create ad directly with timeout
-        const ad = await createAdWithTimeout();
-        console.log('✅ SDK returned ad ID:', ad.id);
-
-        // CRITICAL: Verify the ad actually exists in Meta
-        // The SDK sometimes returns success even if the ad wasn't created
-        try {
-          const verification = new Ad(ad.id);
-          await verification.read(['id', 'name', 'status']);
-          console.log('✅ Verified ad exists in Meta:', ad.id);
-          return ad;
-        } catch (verifyError) {
-          console.error('❌ Ad creation reported success but ad does NOT exist in Meta!');
-          console.error('   Attempted ad ID:', ad.id);
-          console.error('   Verification error:', verifyError.message);
-          throw new Error(`Ad creation failed verification: ${verifyError.message}`);
-        }
-
-      } catch (error) {
-        console.error(`❌ Attempt ${attempt}/${maxRetries} failed:`, error.message);
-
-        // CRITICAL: Before retrying, check if the ad was actually created
-        // Timeouts can mean the ad was created but we didn't get the response
-        console.log('🔍 Checking if ad already exists in Meta before retrying...');
-        try {
-          const { AdSet } = require('facebook-nodejs-business-sdk');
-          const adset = new AdSet(adData.adset_id);
-
-          // Get ads from this adset created in the last 5 minutes with matching name
-          const recentAds = await adset.getAds(['id', 'name', 'created_time'], {
-            filtering: JSON.stringify([{
-              field: 'name',
-              operator: 'EQUAL',
-              value: adData.name
-            }])
-          });
-
-          if (recentAds && recentAds.length > 0) {
-            const existingAd = recentAds[0];
-            console.log(`✅ Found existing ad with same name: ${existingAd.id}`);
-            console.log('   This ad was likely created by the previous attempt that timed out.');
-            console.log('   Using existing ad instead of creating duplicate.');
-
-            // Verify this ad exists
-            const verification = new Ad(existingAd.id);
-            await verification.read(['id', 'name', 'status']);
-            console.log('✅ Verified existing ad:', existingAd.id);
-
-            return existingAd;
-          } else {
-            console.log('   No existing ad found with this name. Safe to retry.');
-          }
-        } catch (checkError) {
-          console.error('⚠️  Could not check for existing ad:', checkError.message);
-          console.log('   Will proceed with retry...');
-        }
-
-        // If this is the last attempt, throw the error
-        if (attempt === maxRetries) {
-          console.error('❌ All retry attempts exhausted for ad:', adData.name);
-          throw error;
-        }
-
-        // Otherwise, wait before retrying (exponential backoff)
-        const waitTime = 2000 * attempt; // 2s, 4s, 6s
-        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        const verification = new Ad(ad.id);
+        await verification.read(['id', 'name', 'status']);
+        console.log('✅ Verified ad exists in Meta:', ad.id);
+        return ad;
+      } catch (verifyError) {
+        console.error('❌ Ad creation reported success but ad does NOT exist in Meta!');
+        console.error('   Attempted ad ID:', ad.id);
+        console.error('   Verification error:', verifyError.message);
+        throw new Error(`Ad creation failed verification: ${verifyError.message}`);
       }
+
+    } catch (error) {
+      console.error(`❌ Ad creation failed:`, error.message);
+
+      // CRITICAL: Check if the ad was actually created despite the error
+      // Timeouts and network errors can occur after Meta created the ad
+      console.log('🔍 Checking if ad was created in Meta despite the error...');
+      try {
+        const { AdSet } = require('facebook-nodejs-business-sdk');
+        const adset = new AdSet(adData.adset_id);
+
+        // Get ads from this adset with matching name
+        const recentAds = await adset.getAds(['id', 'name', 'created_time'], {
+          filtering: JSON.stringify([{
+            field: 'name',
+            operator: 'EQUAL',
+            value: adData.name
+          }])
+        });
+
+        if (recentAds && recentAds.length > 0) {
+          const existingAd = recentAds[0];
+          console.log(`✅ Found existing ad with same name: ${existingAd.id}`);
+          console.log('   Ad was created but response was lost due to timeout/network error.');
+
+          // Verify this ad exists
+          const verification = new Ad(existingAd.id);
+          await verification.read(['id', 'name', 'status']);
+          console.log('✅ Verified existing ad:', existingAd.id);
+
+          return existingAd;
+        } else {
+          console.log('   No existing ad found. Creation genuinely failed.');
+        }
+      } catch (checkError) {
+        console.error('⚠️  Could not check for existing ad:', checkError.message);
+      }
+
+      // Ad doesn't exist, throw the original error
+      throw error;
     }
   }
 }
