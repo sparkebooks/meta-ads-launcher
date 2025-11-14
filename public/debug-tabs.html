@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Performance Tabs</title>
+    <style>
+        .tab {
+            padding: 10px 20px;
+            background: #eee;
+            margin: 5px;
+            cursor: pointer;
+            display: inline-block;
+            border: 2px solid #333;
+        }
+        .tab.active {
+            background: #4CAF50;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        #debug {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Performance Monitoring Debug Test</h1>
+    
+    <div id="debug">Debug info will appear here...</div>
+    
+    <div id="performance-monitoring-tab">
+        <div class="tabs">
+            <div class="tab active" data-tab="ctr-monitoring" id="ctr-tab">📊 CTR Monitoring</div>
+            <div class="tab" data-tab="multi-kpi-monitoring" id="multi-tab">🎯 Multi-KPI Monitoring</div>
+        </div>
+        
+        <div id="ctr-monitoring-tab" class="tab-content active">
+            <h2>CTR Monitoring Content</h2>
+            <p>This is the CTR monitoring section.</p>
+        </div>
+        
+        <div id="multi-kpi-monitoring-tab" class="tab-content">
+            <h2>Multi-KPI Monitoring Content</h2>
+            <p>This is the Multi-KPI monitoring section.</p>
+        </div>
+    </div>
+    
+    <script>
+        const debug = document.getElementById('debug');
+        
+        function log(msg) {
+            debug.innerHTML += msg + '<br>';
+            console.log(msg);
+        }
+        
+        log('Page loaded');
+        
+        // Method 1: Direct element access
+        const ctrTab = document.getElementById('ctr-tab');
+        const multiTab = document.getElementById('multi-tab');
+        
+        log('CTR tab found: ' + (ctrTab ? 'YES' : 'NO'));
+        log('Multi tab found: ' + (multiTab ? 'YES' : 'NO'));
+        
+        // Method 2: Query selector
+        const ctrTab2 = document.querySelector('[data-tab="ctr-monitoring"]');
+        const multiTab2 = document.querySelector('[data-tab="multi-kpi-monitoring"]');
+        
+        log('CTR tab via querySelector: ' + (ctrTab2 ? 'YES' : 'NO'));
+        log('Multi tab via querySelector: ' + (multiTab2 ? 'YES' : 'NO'));
+        
+        // Add click handlers
+        if (ctrTab) {
+            ctrTab.onclick = function() {
+                log('CTR clicked via onclick!');
+                switchTab('ctr');
+            };
+            
+            ctrTab.addEventListener('click', function() {
+                log('CTR clicked via addEventListener!');
+            });
+        }
+        
+        if (multiTab) {
+            multiTab.onclick = function() {
+                log('Multi clicked via onclick!');
+                switchTab('multi');
+            };
+            
+            multiTab.addEventListener('click', function() {
+                log('Multi clicked via addEventListener!');
+            });
+        }
+        
+        // Global click handler
+        document.addEventListener('click', function(e) {
+            if (e.target.getAttribute('data-tab')) {
+                log('Global handler caught click on: ' + e.target.getAttribute('data-tab'));
+            }
+        });
+        
+        function switchTab(type) {
+            log('Switching to: ' + type);
+            
+            const ctrContent = document.getElementById('ctr-monitoring-tab');
+            const multiContent = document.getElementById('multi-kpi-monitoring-tab');
+            
+            if (type === 'ctr') {
+                ctrTab.classList.add('active');
+                multiTab.classList.remove('active');
+                ctrContent.classList.add('active');
+                multiContent.classList.remove('active');
+            } else {
+                multiTab.classList.add('active');
+                ctrTab.classList.remove('active');
+                multiContent.classList.add('active');
+                ctrContent.classList.remove('active');
+            }
+            
+            log('Switch complete');
+        }
+        
+        log('Setup complete - try clicking the tabs');
+    </script>
+</body>
+</html>

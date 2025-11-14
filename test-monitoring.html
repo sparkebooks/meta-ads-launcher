@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Monitoring Functions</title>
+</head>
+<body>
+    <h1>Performance Monitoring Test</h1>
+    
+    <h2>1. Campaigns</h2>
+    <div id="campaigns">Loading...</div>
+    
+    <h2>2. AdSets for First Campaign</h2>
+    <div id="adsets">Will load after campaigns...</div>
+    
+    <h2>3. CTR Check Test</h2>
+    <button onclick="testCTRCheck()">Test CTR Check</button>
+    <div id="ctr-result"></div>
+    
+    <h2>4. Multi-KPI Check Test</h2>
+    <button onclick="testMultiKPICheck()">Test Multi-KPI Check</button>
+    <div id="multi-result"></div>
+
+    <script>
+        const apiBase = 'http://localhost:3002/api';
+        let firstCampaignId = null;
+        let firstAdSetId = null;
+        
+        // Load campaigns
+        async function loadCampaigns() {
+            try {
+                const response = await fetch(`${apiBase}/monitoring/campaigns`);
+                const data = await response.json();
+                
+                document.getElementById('campaigns').innerHTML = `
+                    <p>Found ${data.count} campaigns:</p>
+                    <ul>
+                        ${data.campaigns.map(c => `<li>${c.name} (${c.id}) - ${c.status}</li>`).join('')}
+                    </ul>
+                `;
+                
+                if (data.campaigns.length > 0) {
+                    firstCampaignId = data.campaigns[0].id;
+                    loadAdSets(firstCampaignId);
+                }
+            } catch (error) {
+                document.getElementById('campaigns').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        // Load adsets
+        async function loadAdSets(campaignId) {
+            try {
+                const response = await fetch(`${apiBase}/monitoring/campaigns/${campaignId}/adsets`);
+                const data = await response.json();
+                
+                document.getElementById('adsets').innerHTML = `
+                    <p>Found ${data.count} adsets for campaign ${campaignId}:</p>
+                    <ul>
+                        ${data.adsets.map(a => `<li>${a.name} (${a.id}) - ${a.status}</li>`).join('')}
+                    </ul>
+                `;
+                
+                if (data.adsets.length > 0) {
+                    firstAdSetId = data.adsets[0].id;
+                }
+            } catch (error) {
+                document.getElementById('adsets').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        // Test CTR Check
+        async function testCTRCheck() {
+            if (!firstCampaignId || !firstAdSetId) {
+                alert('No campaign or adset loaded yet');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${apiBase}/monitoring/check-ctr`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaignId: firstCampaignId,
+                        adSetIds: [firstAdSetId],
+                        minCTR: 1.0
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('ctr-result').innerHTML = `
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('ctr-result').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        // Test Multi-KPI Check
+        async function testMultiKPICheck() {
+            if (!firstCampaignId || !firstAdSetId) {
+                alert('No campaign or adset loaded yet');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${apiBase}/monitoring/check-multi-kpi`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaignId: firstCampaignId,
+                        adSetIds: [firstAdSetId],
+                        thresholds: {
+                            maxCostPerStreak: 5.0,
+                            maxCostPerPurchase: 10.0,
+                            minROAS: 2.0
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('multi-result').innerHTML = `
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('multi-result').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        // Load on page load
+        loadCampaigns();
+    </script>
+</body>
+</html>
