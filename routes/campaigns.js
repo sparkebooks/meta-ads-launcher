@@ -654,6 +654,11 @@ router.post('/create-ads-batch', async (req, res) => {
           successful++;
           console.log(`✅ Created and verified ad: ${adName} (${newAd.id})`);
 
+          // Rate limiting: Add delay between ad creation to prevent Meta API rate limits
+          // This prevents issues where ads get stuck in inconsistent states when creating many at once
+          await new Promise(resolve => setTimeout(resolve, 750));
+          console.log('⏱️ Rate limit delay (750ms) applied');
+
         } catch (error) {
           console.error(`❌ Failed to create ad for ${adCopy.variation} + ${creativeId}:`, error);
           console.error(`   Full error:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
@@ -984,6 +989,11 @@ router.post('/create-duplicate-adset', async (req, res) => {
             adsInThisAdset++;
             totalAdsCreated++;
             console.log(`✅ Created ad: ${adName} (${newAd.id})`);
+
+            // Rate limiting: Add delay between ad creation to prevent Meta API rate limits
+            // This prevents issues where ads get stuck in inconsistent states when creating many at once
+            await new Promise(resolve => setTimeout(resolve, 750));
+            console.log('⏱️ Rate limit delay (750ms) applied');
 
           } catch (error) {
             console.error(`❌ Failed to create ad for ${adCopy.variation} + ${creativeId} in AdSet ${adsetNumber}:`, error);
