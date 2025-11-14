@@ -141,7 +141,7 @@ router.post('/upload-for-adset', (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    const { adsetId, adAccountId } = req.body;
+    const { adsetId } = req.body;
     const uploadedFiles = [];
 
     if (!req.files || req.files.length === 0) {
@@ -152,10 +152,7 @@ router.post('/upload-for-adset', (req, res, next) => {
       return res.status(400).json({ error: 'AdSet ID is required' });
     }
 
-    // Use selected ad account or default from .env
-    const activeAdAccountId = adAccountId || process.env.META_AD_ACCOUNT_ID;
-    const activeAccount = new AdAccount(activeAdAccountId);
-    console.log(`📁 Uploading ${req.files.length} files for adset ${adsetId} to ad account ${activeAdAccountId}`);
+    console.log(`📁 Uploading ${req.files.length} files for adset ${adsetId}`);
 
     for (const file of req.files) {
       try {
@@ -182,7 +179,7 @@ router.post('/upload-for-adset', (req, res, next) => {
               
               // Method 1: Try with file stream
               console.log(`🔄 Attempting Meta upload with file stream...`);
-              const imageData = await activeAccount.createAdImage([], {
+              const imageData = await account.createAdImage([], {
                 filename: fs.createReadStream(file.path)
               });
               
@@ -211,8 +208,8 @@ router.post('/upload-for-adset', (req, res, next) => {
                 console.log(`🔄 Attempting Meta upload with base64 data...`);
                 const fileBuffer = await fs.readFile(file.path);
                 const base64Data = fileBuffer.toString('base64');
-
-                const imageData = await activeAccount.createAdImage([], {
+                
+                const imageData = await account.createAdImage([], {
                   bytes: base64Data
                 });
                 
@@ -240,8 +237,8 @@ router.post('/upload-for-adset', (req, res, next) => {
                   // Method 3: Try with raw buffer
                   console.log(`🔄 Attempting Meta upload with raw buffer...`);
                   const fileBuffer = await fs.readFile(file.path);
-
-                  const imageData = await activeAccount.createAdImage([], {
+                  
+                  const imageData = await account.createAdImage([], {
                     bytes: fileBuffer
                   });
                   
@@ -310,7 +307,7 @@ router.post('/upload-for-adset', (req, res, next) => {
             console.log(`📊 Video size: ${fileSizeInMB} MB`);
 
             // Upload video and get video ID + thumbnail URL
-            const videoData = await videoUploadService.uploadVideoToMeta(file.path, file.originalname, activeAdAccountId);
+            const videoData = await videoUploadService.uploadVideoToMeta(file.path, file.originalname);
             metaVideoId = videoData.videoId;
             metaThumbnailUrl = videoData.thumbnailUrl;
 

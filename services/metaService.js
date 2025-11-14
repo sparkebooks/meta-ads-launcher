@@ -143,14 +143,9 @@ class MetaService {
     }
   }
 
-  async getActiveCampaigns(adAccountId = null) {
+  async getActiveCampaigns() {
     try {
-      const activeAdAccountId = adAccountId || process.env.META_AD_ACCOUNT_ID;
-      const activeAccount = new AdAccount(activeAdAccountId);
-
-      console.log(`📋 Fetching campaigns from ad account: ${activeAdAccountId}`);
-
-      const campaigns = await activeAccount.getCampaigns([
+      const campaigns = await account.getCampaigns([
         'name',
         'status',
         'effective_status',

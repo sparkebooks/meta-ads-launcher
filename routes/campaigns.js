@@ -10,41 +10,10 @@ const router = express.Router();
 FacebookAdsApi.init(process.env.META_ACCESS_TOKEN);
 const account = new AdAccount(process.env.META_AD_ACCOUNT_ID);
 
-// Get all ad accounts from Business Manager
-router.get('/ad-accounts', async (req, res) => {
-  try {
-    const axios = require('axios');
-    const accessToken = process.env.META_ACCESS_TOKEN;
-
-    // Get ad accounts the user has access to
-    const accountsUrl = `https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status,currency,timezone_name&access_token=${accessToken}`;
-    const accountsResponse = await axios.get(accountsUrl);
-
-    if (accountsResponse.data.data && accountsResponse.data.data.length > 0) {
-      const adAccounts = accountsResponse.data.data.map(account => ({
-        id: account.id,
-        name: account.name,
-        status: account.account_status,
-        currency: account.currency,
-        timezone: account.timezone_name || 'N/A',
-        isDefault: account.id === process.env.META_AD_ACCOUNT_ID
-      }));
-
-      res.json({ adAccounts, count: adAccounts.length });
-    } else {
-      res.json({ adAccounts: [], count: 0 });
-    }
-  } catch (error) {
-    console.error('Error getting ad accounts:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Get all campaigns
 router.get('/', async (req, res) => {
   try {
-    const { adAccountId } = req.query;
-    const campaigns = await metaService.getActiveCampaigns(adAccountId);
+    const campaigns = await metaService.getActiveCampaigns();
     res.json({ campaigns, count: campaigns.length });
   } catch (error) {
     console.error('Error getting campaigns:', error);

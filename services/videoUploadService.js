@@ -18,12 +18,10 @@ const account = new AdAccount(process.env.META_AD_ACCOUNT_ID);
  * Upload a video file to Meta Ads using resumable upload for large files
  * @param {string} filePath - Path to the video file
  * @param {string} fileName - Original filename
- * @param {string} adAccountId - Ad Account ID to upload to (optional, defaults to env)
  * @returns {Promise<Object>} Object with videoId and thumbnailUrl
  */
-async function uploadVideoToMeta(filePath, fileName, adAccountId = null) {
-    const activeAdAccountId = adAccountId || process.env.META_AD_ACCOUNT_ID;
-    console.log(`🎥 Uploading video to Meta (Account: ${activeAdAccountId}): ${fileName}`);
+async function uploadVideoToMeta(filePath, fileName) {
+    console.log(`🎥 Uploading video to Meta: ${fileName}`);
 
     try {
         // Get file size for logging
@@ -35,7 +33,7 @@ async function uploadVideoToMeta(filePath, fileName, adAccountId = null) {
         // Use resumable upload for files larger than 50MB
         if (fileSizeBytes > 50 * 1024 * 1024) {
             console.log(`📦 File is large (>${fileSizeInMB}MB), using resumable upload...`);
-            return await uploadLargeVideoResumable(filePath, fileName, fileSizeBytes, activeAdAccountId);
+            return await uploadLargeVideoResumable(filePath, fileName, fileSizeBytes);
         }
 
         // Method 1: Direct HTTP API call with multipart form-data (for small files)
@@ -46,7 +44,7 @@ async function uploadVideoToMeta(filePath, fileName, adAccountId = null) {
         form.append('access_token', process.env.META_ACCESS_TOKEN);
 
         const response = await axios.post(
-            `https://graph.facebook.com/v19.0/${activeAdAccountId}/advideos`,
+            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
             form,
             {
                 headers: {
@@ -101,18 +99,17 @@ async function uploadVideoToMeta(filePath, fileName, adAccountId = null) {
  * @param {number} fileSize - File size in bytes
  * @returns {Promise<Object>} Object with videoId and thumbnailUrl
  */
-async function uploadLargeVideoResumable(filePath, fileName, fileSize, adAccountId = null) {
-    const activeAdAccountId = adAccountId || process.env.META_AD_ACCOUNT_ID;
+async function uploadLargeVideoResumable(filePath, fileName, fileSize) {
     console.log(`🚀 Starting resumable upload for ${fileName}...`);
 
     try {
         // Step 1: Initialize upload session
         console.log(`📝 Step 1: Initializing upload session...`);
         console.log(`   - File size: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-        console.log(`   - Ad Account: ${activeAdAccountId}`);
+        console.log(`   - Ad Account: ${process.env.META_AD_ACCOUNT_ID}`);
 
         const initResponse = await axios.post(
-            `https://graph.facebook.com/v19.0/${activeAdAccountId}/advideos`,
+            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
             null,
             {
                 params: {
@@ -181,7 +178,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize, adAccount
                 while (!uploadSuccess && retries < maxRetries) {
                     try {
                         console.log(`📤 Sending chunk to Meta API...`);
-                        console.log(`   - URL: https://graph.facebook.com/v19.0/${activeAdAccountId}/advideos`);
+                        console.log(`   - URL: https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`);
                         console.log(`   - Session ID: ${uploadSessionId}`);
                         console.log(`   - Start offset: ${currentOffset}`);
                         console.log(`   - Chunk size: ${chunkBuffer.length}`);
@@ -194,7 +191,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize, adAccount
                         });
 
                         const uploadResponse = await axios.post(
-                            `https://graph.facebook.com/v19.0/${activeAdAccountId}/advideos`,
+                            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
                             formData,
                             {
                                 params: {
@@ -271,7 +268,7 @@ async function uploadLargeVideoResumable(filePath, fileName, fileSize, adAccount
         console.log(`   - Title: ${fileName}`);
 
         const finalizeResponse = await axios.post(
-            `https://graph.facebook.com/v19.0/${activeAdAccountId}/advideos`,
+            `https://graph.facebook.com/v19.0/${process.env.META_AD_ACCOUNT_ID}/advideos`,
             null,
             {
                 params: {
