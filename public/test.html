@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Campaign Test</title>
+</head>
+<body>
+    <h1>Campaign Dropdown Test</h1>
+    <select id="campaign-select" style="width: 400px; padding: 10px;">
+        <option value="">Loading campaigns...</option>
+    </select>
+    
+    <script>
+        console.log('Starting test...');
+        
+        fetch('/api/campaigns')
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Data received:', data);
+                
+                const select = document.getElementById('campaign-select');
+                select.innerHTML = '<option value="">Select a campaign...</option>';
+                
+                if (data.campaigns && data.campaigns.length > 0) {
+                    data.campaigns.forEach(campaign => {
+                        const option = document.createElement('option');
+                        option.value = campaign.id;
+                        option.textContent = `${campaign.name} (${campaign.status})`;
+                        select.appendChild(option);
+                    });
+                    console.log('Loaded', data.campaigns.length, 'campaigns');
+                } else {
+                    console.log('No campaigns found');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('campaign-select').innerHTML = '<option value="">Error loading</option>';
+            });
+    </script>
+</body>
+</html>
