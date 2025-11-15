@@ -534,6 +534,20 @@ router.post('/create-ads-batch', async (req, res) => {
             console.log(`   - CTA Type: ${ctaType}`);
             console.log(`   - Destination: ${destinationLink}`);
 
+            // For Cross Channel Optimization ads, include both link and object_store_url
+            const videoCallToAction = isAppInstallAd ? {
+              type: ctaType,
+              value: {
+                link: adCopy.landingPageUrl, // Include web URL for cross-channel
+                object_store_url: appStoreUrl // Required for Cross Channel Optimization
+              }
+            } : {
+              type: ctaType,
+              value: {
+                link: destinationLink
+              }
+            };
+
             adData = {
               name: adName,
               adset_id: adsetId,
@@ -548,12 +562,7 @@ router.post('/create-ads-batch', async (req, res) => {
                     message: adCopy.primaryText,
                     title: adCopy.headline,
                     link_description: adCopy.description,
-                    call_to_action: {
-                      type: ctaType,
-                      value: {
-                        link: destinationLink
-                      }
-                    }
+                    call_to_action: videoCallToAction
                   }
                 }
               },
@@ -576,14 +585,21 @@ router.post('/create-ads-batch', async (req, res) => {
             console.log(`   - Destination: ${destinationLink}`);
 
             // For app install ads, CTA needs a value object; for web ads, it doesn't
-            const callToActionObj = isAppInstallAd ? {
-              type: ctaType,
-              value: {
-                link: destinationLink
-              }
-            } : {
-              type: ctaType
-            };
+            // For Cross Channel Optimization ads, use object_store_url instead of link
+            let callToActionObj;
+            if (isAppInstallAd) {
+              callToActionObj = {
+                type: ctaType,
+                value: {
+                  link: adCopy.landingPageUrl, // Include web URL for cross-channel
+                  object_store_url: appStoreUrl // Required for Cross Channel Optimization
+                }
+              };
+            } else {
+              callToActionObj = {
+                type: ctaType
+              };
+            }
 
             adData = {
               name: adName,
@@ -870,6 +886,20 @@ router.post('/create-duplicate-adset', async (req, res) => {
               console.log(`   - CTA Type: ${ctaType}`);
               console.log(`   - Destination: ${destinationLink}`);
 
+              // For Cross Channel Optimization ads, include both link and object_store_url
+              const videoCallToAction = isAppInstallAd ? {
+                type: ctaType,
+                value: {
+                  link: adCopy.landingPageUrl, // Include web URL for cross-channel
+                  object_store_url: appStoreUrl // Required for Cross Channel Optimization
+                }
+              } : {
+                type: ctaType,
+                value: {
+                  link: destinationLink
+                }
+              };
+
               adData = {
                 name: adName,
                 adset_id: newAdsetId,
@@ -884,12 +914,7 @@ router.post('/create-duplicate-adset', async (req, res) => {
                       message: adCopy.primaryText,
                       title: adCopy.headline,
                       link_description: adCopy.description,
-                      call_to_action: {
-                        type: ctaType,
-                        value: {
-                          link: destinationLink
-                        }
-                      }
+                      call_to_action: videoCallToAction
                     }
                   }
                 },
@@ -912,14 +937,21 @@ router.post('/create-duplicate-adset', async (req, res) => {
               console.log(`   - Destination: ${destinationLink}`);
 
               // For app install ads, CTA needs a value object; for web ads, it doesn't
-              const callToActionObj = isAppInstallAd ? {
-                type: ctaType,
-                value: {
-                  link: destinationLink
-                }
-              } : {
-                type: ctaType
-              };
+              // For Cross Channel Optimization ads, use object_store_url instead of link
+              let callToActionObj;
+              if (isAppInstallAd) {
+                callToActionObj = {
+                  type: ctaType,
+                  value: {
+                    link: adCopy.landingPageUrl, // Include web URL for cross-channel
+                    object_store_url: appStoreUrl // Required for Cross Channel Optimization
+                  }
+                };
+              } else {
+                callToActionObj = {
+                  type: ctaType
+                };
+              }
 
               adData = {
                 name: adName,
