@@ -22,8 +22,8 @@ class MetaService {
         'frequency'
       ], {
         date_preset: dateRange,
-        level: 'ad',
-        breakdowns: ['ad_id']
+        level: 'ad'
+        // Removed breakdowns: ['ad_id'] - not supported in v23.0, ad_id is auto-included with level: 'ad'
       });
 
       return insights.map(insight => ({
