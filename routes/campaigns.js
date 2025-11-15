@@ -438,18 +438,38 @@ router.post('/create-ads-batch', async (req, res) => {
 
     // Detect if this is an app install ad or web conversion ad
     console.log('🔍 Detecting ad type...');
-    const { AdSet } = require('facebook-nodejs-business-sdk');
+    const { AdSet, AdCreative } = require('facebook-nodejs-business-sdk');
     const adset = new AdSet(adsetId);
     const adsetDetails = await adset.read(['promoted_object', 'optimization_goal']);
 
-    const isAppInstallAd = !!adsetDetails.promoted_object?.application_id;
-    const appStoreUrl = adsetDetails.promoted_object?.object_store_url;
+    // Check for app install via adset promoted_object OR reference ad creative's object_store_urls
+    let isAppInstallAd = !!adsetDetails.promoted_object?.application_id;
+    let appStoreUrl = adsetDetails.promoted_object?.object_store_url;
+
+    // For Cross Channel Optimization ads, check the reference ad's creative
+    if (!isAppInstallAd && referenceAd?.creative?.id) {
+      try {
+        const creative = new AdCreative(referenceAd.creative.id);
+        const creativeDetails = await creative.read(['object_story_spec']);
+
+        const objectStoreUrls = creativeDetails?.object_story_spec?.link_data?.call_to_action?.value?.object_store_urls ||
+                               creativeDetails?.object_story_spec?.video_data?.call_to_action?.value?.object_store_urls;
+
+        if (objectStoreUrls && objectStoreUrls.length > 0) {
+          isAppInstallAd = true;
+          appStoreUrl = objectStoreUrls[0]; // Use first store URL (usually iOS or Android)
+          console.log('📱 Detected Cross Channel Optimization ad via creative object_store_urls');
+        }
+      } catch (err) {
+        console.log('⚠️ Could not check creative for object_store_urls:', err.message);
+      }
+    }
 
     if (isAppInstallAd) {
-      console.log('📱 Detected: APP INSTALL AD');
-      console.log(`   - Application ID: ${adsetDetails.promoted_object.application_id}`);
+      console.log('📱 Detected: APP INSTALL / CROSS CHANNEL AD');
+      console.log(`   - Application ID: ${adsetDetails.promoted_object?.application_id || 'N/A (using creative object_store_urls)'}`);
       console.log(`   - App Store URL: ${appStoreUrl}`);
-      console.log('   - Will use INSTALL_MOBILE_APP CTA and ignore CSV landing page URLs');
+      console.log('   - Will use app install CTA with both web and app store URLs');
     } else {
       console.log('🌐 Detected: WEB CONVERSION AD');
       console.log('   - Will use CSV landing page URLs and web CTAs');
@@ -748,14 +768,34 @@ router.post('/create-duplicate-adset', async (req, res) => {
 
     // Detect if this is an app install ad or web conversion ad
     console.log('🔍 Detecting ad type from reference adset...');
-    const isAppInstallAd = !!adsetDetails.promoted_object?.application_id;
-    const appStoreUrl = adsetDetails.promoted_object?.object_store_url;
+    let isAppInstallAd = !!adsetDetails.promoted_object?.application_id;
+    let appStoreUrl = adsetDetails.promoted_object?.object_store_url;
+
+    // For Cross Channel Optimization ads, check the reference ad's creative
+    if (!isAppInstallAd && referenceAd?.creative?.id) {
+      try {
+        const { AdCreative } = require('facebook-nodejs-business-sdk');
+        const creative = new AdCreative(referenceAd.creative.id);
+        const creativeDetails = await creative.read(['object_story_spec']);
+
+        const objectStoreUrls = creativeDetails?.object_story_spec?.link_data?.call_to_action?.value?.object_store_urls ||
+                               creativeDetails?.object_story_spec?.video_data?.call_to_action?.value?.object_store_urls;
+
+        if (objectStoreUrls && objectStoreUrls.length > 0) {
+          isAppInstallAd = true;
+          appStoreUrl = objectStoreUrls[0]; // Use first store URL (usually iOS or Android)
+          console.log('📱 Detected Cross Channel Optimization ad via creative object_store_urls');
+        }
+      } catch (err) {
+        console.log('⚠️ Could not check creative for object_store_urls:', err.message);
+      }
+    }
 
     if (isAppInstallAd) {
-      console.log('📱 Detected: APP INSTALL AD');
-      console.log(`   - Application ID: ${adsetDetails.promoted_object.application_id}`);
+      console.log('📱 Detected: APP INSTALL / CROSS CHANNEL AD');
+      console.log(`   - Application ID: ${adsetDetails.promoted_object?.application_id || 'N/A (using creative object_store_urls)'}`);
       console.log(`   - App Store URL: ${appStoreUrl}`);
-      console.log('   - Will use INSTALL_MOBILE_APP CTA and ignore CSV landing page URLs');
+      console.log('   - Will use app install CTA with both web and app store URLs');
     } else {
       console.log('🌐 Detected: WEB CONVERSION AD');
       console.log('   - Will use CSV landing page URLs and web CTAs');
